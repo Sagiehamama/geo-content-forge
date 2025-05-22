@@ -1,6 +1,7 @@
 
 import { FormData, GeneratedContent } from "@/components/content/form/types";
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 
 // Generate content using Edge Function
 export const generateContent = async (formData: FormData): Promise<GeneratedContent | null> => {
@@ -51,7 +52,7 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
         include_images: formData.includeImages,
         include_frontmatter: formData.includeFrontmatter,
         use_ai_media: formData.useAiMedia,
-        audience: formData.audience,  // Store audience field
+        audience: formData.audience,
       })
       .select('id')
       .single();
@@ -82,7 +83,7 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
     const { error: contentError } = await supabase
       .from('generated_content')
       .insert({
-        content_request_id: requestId,
+        request_id: requestId,
         title: generatedContent.title,
         content: generatedContent.content,
         frontmatter: frontmatterJson,
@@ -113,7 +114,7 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
         *,
         content_requests (*)
       `)
-      .order('created_at', { ascending: false });
+      .order('generated_at', { ascending: false });
     
     if (error) {
       console.error('Error retrieving content history:', error);
@@ -124,20 +125,90 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
       return [];
     }
     
-    return data.map(item => ({
-      id: item.id,
-      title: item.title,
-      content: item.content,
-      frontmatter: item.frontmatter || {},
-      images: item.images || [],
-      wordCount: item.word_count,
-      readingTime: item.reading_time,
-      generatedAt: item.generated_at || item.created_at,
-      prompt: item.content_requests?.prompt || '',
-      language: item.content_requests?.language || 'en'
-    })) as (GeneratedContent & { generatedAt: string })[];
+    // Process the results to match our GeneratedContent type
+    return data.map(item => {
+      // Parse the frontmatter and images from JSON
+      const frontmatterObj = typeof item.frontmatter === 'string' 
+        ? JSON.parse(item.frontmatter) 
+        : (item.frontmatter || {});
+        
+      const imagesArr = item.images 
+        ? (typeof item.images === 'string' ? JSON.parse(item.images) : item.images) 
+        : [];
+        
+      return {
+        id: item.id,
+        title: item.title,
+        content: item.content,
+        frontmatter: frontmatterObj,
+        images: imagesArr,
+        wordCount: item.word_count,
+        readingTime: item.reading_time,
+        generatedAt: item.generated_at || item.request_id, // Fallback if generated_at is missing
+        prompt: item.content_requests?.prompt || '',
+        language: item.content_requests?.language || 'en'
+      };
+    }) as (GeneratedContent & { generatedAt: string })[];
   } catch (error) {
     console.error('Error retrieving content history:', error);
     return [] as (GeneratedContent & { generatedAt: string })[];
+  }
+};
+
+// Get OpenAI API key from database
+export const getOpenAIApiKey = async (): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'openai_api_key')
+      .single();
+    
+    if (error || !data) {
+      console.error('Error retrieving OpenAI API key:', error);
+      return null;
+    }
+    
+    return data.value;
+  } catch (error) {
+    console.error('Error in getOpenAIApiKey:', error);
+    return null;
+  }
+};
+
+// Set OpenAI API key in database
+export const setOpenAIApiKey = async (apiKey: string): Promise<boolean> => {
+  try {
+    // Check if key exists
+    const { data: existingKey } = await supabase
+      .from('app_config')
+      .select('id')
+      .eq('key', 'openai_api_key')
+      .single();
+    
+    let result;
+    
+    if (existingKey) {
+      // Update existing key
+      result = await supabase
+        .from('app_config')
+        .update({ value: apiKey })
+        .eq('key', 'openai_api_key');
+    } else {
+      // Insert new key
+      result = await supabase
+        .from('app_config')
+        .insert({ key: 'openai_api_key', value: apiKey });
+    }
+    
+    if (result.error) {
+      console.error('Error setting OpenAI API key:', result.error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error in setOpenAIApiKey:', error);
+    return false;
   }
 };
