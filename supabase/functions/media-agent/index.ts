@@ -160,15 +160,67 @@ serve(async (req) => {
     // Example expected: [{ location: 'after_intro', query: 'infographic about X' }, ...]
     let imageSpots: { location: string, query: string }[] = [];
     try {
-      imageSpots = JSON.parse(suggestionsText);
-    } catch {
-      // Fallback: try to parse a numbered list
+      // First try to parse as JSON
+      const jsonResult = JSON.parse(suggestionsText);
+      
+      // Handle array format
+      if (Array.isArray(jsonResult)) {
+        imageSpots = jsonResult.map((spot, idx) => {
+          // If it's already in the right format, use it as is
+          if (spot.location && spot.query) {
+            return spot;
+          }
+          // Otherwise try to extract from other possible formats
+          return {
+            location: `spot_${idx+1}`,
+            query: typeof spot === 'string' ? spot : spot.description || spot.query || `image for section ${idx+1}`
+          };
+        });
+      } 
+      // Handle object format with numbered keys
+      else if (typeof jsonResult === 'object') {
+        imageSpots = Object.entries(jsonResult).map(([key, value], idx) => {
+          return {
+            location: `spot_${idx+1}`,
+            query: typeof value === 'string' ? value : (value as any).description || (value as any).query || key
+          };
+        });
+      }
+    } catch (e) {
+      console.log('Failed to parse as JSON, trying as list format', e);
+      // Fallback: try to parse a numbered list or bullet points
       const lines = suggestionsText.split('\n').filter(l => l.trim());
-      imageSpots = lines.map((line, idx) => ({
-        location: `spot_${idx+1}`,
-        query: line.replace(/^\d+\.\s*/, '').trim()
-      }));
+      imageSpots = lines
+        .filter(line => line.match(/^\d+\.|\*|-|•/) || line.includes('image') || line.includes('Image'))
+        .map((line, idx) => {
+          // Clean up the line by removing prefixes like "1. " or "* " and extract the query
+          const cleanLine = line.replace(/^\d+\.|\*|-|•|\s*/, '').trim();
+          return {
+            location: `spot_${idx+1}`,
+            query: cleanLine
+          };
+        });
+      
+      // If we still don't have any spots, just take first few lines
+      if (imageSpots.length === 0 && lines.length > 0) {
+        imageSpots = lines.slice(0, Math.min(3, lines.length)).map((line, idx) => ({
+          location: `spot_${idx+1}`,
+          query: line.trim() || `Image for section ${idx+1}`
+        }));
+      }
     }
+    
+    // Ensure we have at least one image spot
+    if (imageSpots.length === 0) {
+      imageSpots = [
+        { location: 'spot_1', query: title || 'featured image' }
+      ];
+    }
+    
+    // Limit to max 3 image spots
+    imageSpots = imageSpots.slice(0, 3);
+    
+    console.log('Identified image spots:', imageSpots);
 
     // For each spot, search for images
     const images = [];
