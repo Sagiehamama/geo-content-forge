@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { 
   Card, 
   CardContent, 
@@ -134,13 +134,30 @@ const FormSection = () => {
     }
   };
 
+  const handleClearForm = () => {
+    clearContent();
+    setLocalFormData(initialFormData);
+    toast.success('Form cleared. Ready for new content.');
+  };
+
   return (
     <Card className="w-full max-w-3xl mx-auto">
-      <CardHeader>
-        <CardTitle className="text-2xl gradient-heading">Create Content</CardTitle>
-        <CardDescription>
-          Configure the parameters for your AI-generated content
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="text-2xl gradient-heading">Create Content</CardTitle>
+          <CardDescription>
+            Configure the parameters for your AI-generated content
+          </CardDescription>
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleClearForm}
+          className="flex items-center gap-1"
+        >
+          <RefreshCw className="h-4 w-4" />
+          New Content
+        </Button>
       </CardHeader>
       
       <form onSubmit={handleSubmit}>

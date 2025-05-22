@@ -61,9 +61,11 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
   }, [formData, generatedContent, mediaSpots, selectedImages]);
 
   const clearContent = () => {
+    setFormData(null);
     setGeneratedContent(null);
     setMediaSpots([]);
     setSelectedImages({});
+    localStorage.removeItem('contentFormData');
     localStorage.removeItem('generatedContent');
     localStorage.removeItem('mediaSpots');
     localStorage.removeItem('selectedImages');
