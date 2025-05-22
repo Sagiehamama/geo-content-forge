@@ -117,6 +117,7 @@ const ResultsPage = () => {
       getMediaSuggestions({ markdown: contextContent.content, title: contextContent.title })
         .then(spots => {
           console.log('Media spots received:', spots);
+          console.log('First spot options:', spots[0]?.options);
           if (spots.length === 0) {
             // Create a default spot if none were found
             spots = [
@@ -708,24 +709,65 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       <Dialog open={!!selectedSpot} onOpenChange={(open) => !open && setSelectedSpot(null)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl">Select an Image</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-2xl">Select an Image</DialogTitle>
+            <DialogDescription className="text-base">
               Choose an image for {selectedSpot && selectedSpot.replace(/_/g, ' ')}
             </DialogDescription>
           </DialogHeader>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
+            {/* Remove Image Option */}
+            <Card 
+              className={`overflow-hidden cursor-pointer transition-all ${
+                selectedSpot && !contextSelectedImages[selectedSpot] ? 'ring-2 ring-primary' : 'hover:shadow-md'
+              }`} 
+              onClick={() => handleSelectImage('')}
+            >
+              <div className="p-2 flex flex-col">
+                <div className="relative aspect-video rounded overflow-hidden bg-gray-50 border-2 border-dashed border-gray-300">
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                    <p className="text-center px-4">
+                      <span className="block text-lg font-medium mb-2">No Image</span>
+                      <span className="block text-sm">Remove image from this spot</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <p className="text-sm font-medium">Remove Image</p>
+                  <p className="text-xs text-gray-500">Content will flow without an image</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Image Options */}
             {selectedSpot && (contextMediaSpots.find(s => s.location === selectedSpot)?.options || []).map((option, idx) => (
-              <Card key={idx} className={`overflow-hidden cursor-pointer transition-all ${
-                contextSelectedImages[selectedSpot] === option.url ? 'ring-2 ring-primary' : 'hover:shadow-md'
-              }`} onClick={() => handleSelectImage(option.url)}>
+              <Card 
+                key={idx} 
+                className={`overflow-hidden cursor-pointer transition-all ${
+                  contextSelectedImages[selectedSpot] === option.url ? 'ring-2 ring-primary' : 'hover:shadow-md'
+                }`} 
+                onClick={() => handleSelectImage(option.url)}
+              >
                 <div className="p-2 flex flex-col">
-                  <div className="relative aspect-video rounded overflow-hidden">
-                    <img 
-                      src={option.url} 
-                      alt={option.alt || `Option ${idx + 1}`} 
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="relative aspect-video rounded overflow-hidden bg-gray-100">
+                    {option.url === PLACEHOLDER_IMAGE ? (
+                      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                        <p className="text-center px-4">
+                          <span className="block text-lg font-medium mb-2">No image available</span>
+                          <span className="block text-sm">Click Refresh Images to try again</span>
+                        </p>
+                      </div>
+                    ) : (
+                      <img 
+                        src={option.url} 
+                        alt={option.alt || `Option ${idx + 1}`} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          console.error(`Failed to load image: ${option.url}`);
+                          e.currentTarget.src = PLACEHOLDER_IMAGE;
+                        }}
+                      />
+                    )}
                     {contextSelectedImages[selectedSpot] === option.url && (
                       <div className="absolute top-2 right-2 bg-primary text-white p-1 rounded-full">
                         <Check className="h-4 w-4" />
@@ -741,11 +783,24 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
             ))}
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setSelectedSpot(null)}>Cancel</Button>
-            <Button onClick={() => handleRefreshImages()}>
-              {mediaLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-              Refresh Images
+            <Button 
+              onClick={() => handleRefreshImages()} 
+              disabled={mediaLoading}
+              className="min-w-[120px]"
+            >
+              {mediaLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh Images
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

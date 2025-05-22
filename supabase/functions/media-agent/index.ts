@@ -35,6 +35,7 @@ async function searchImages(query: string) {
   }
   
   try {
+    console.log('Searching Unsplash for:', query);
     const response = await fetch(
       `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=3`,
       {
@@ -49,27 +50,27 @@ async function searchImages(query: string) {
     }
     
     const data = await response.json();
+    console.log('Unsplash response:', data.results?.length, 'images found');
+    
+    if (!data.results?.length) {
+      throw new Error('No images found');
+    }
+    
     return data.results.map(photo => ({
-      url: `${photo.urls.regular}&auto=format&fit=crop&w=600&q=80`,
+      url: photo.urls.regular,  // Remove the extra query params that were causing issues
       alt: photo.alt_description || query,
       caption: photo.description || `Image for ${query}`,
       source: `Unsplash (Photo by ${photo.user.name})`
     }));
   } catch (error) {
     console.error('Error searching images:', error);
-    // Fallback images in case of API failure
+    // Return a more visually obvious placeholder for errors
     return [
       {
-        url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
-        alt: `${query} - Example Image 1`,
-        caption: `A relevant image for ${query}`,
-        source: 'Unsplash'
-      },
-      {
-        url: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=600&q=80',
-        alt: `${query} - Example Image 2`,
-        caption: `Another relevant image for ${query}`,
-        source: 'Unsplash'
+        url: PLACEHOLDER_IMAGE,
+        alt: `${query} - Placeholder`,
+        caption: `Placeholder for ${query}`,
+        source: 'System (Error loading Unsplash images)'
       }
     ];
   }
