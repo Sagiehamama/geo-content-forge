@@ -25,39 +25,39 @@ const AgentCard = ({ icon, title, description, colorClass }: AgentCardProps) => 
 
 const MultiAgentDiagram = () => {
   return (
-    <div className="py-8">
-      <h2 className="text-2xl font-bold text-center mb-6">Multi-Agent Environment</h2>
+    <div className="py-6">
+      <h2 className="text-2xl font-bold text-center mb-4 gradient-heading">Multi-Agent Environment</h2>
       
-      <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-5 gap-3">
         <AgentCard 
-          icon={<Network size={24} />}
+          icon={<Network size={20} />}
           title="Research Agent"
           description="Collects relevant information from reliable sources"
-          colorClass="bg-gradient-to-br from-blue-500 to-blue-600"
+          colorClass="bg-gradient-to-br from-theme-primary to-theme-secondary"
         />
         <AgentCard 
-          icon={<BrainCircuit size={24} />}
+          icon={<BrainCircuit size={20} />}
           title="Content Generation"
           description="Creates engaging, original content"
-          colorClass="bg-gradient-to-br from-purple-500 to-purple-600"
+          colorClass="bg-gradient-to-br from-theme-secondary to-theme-accent"
         />
         <AgentCard 
-          icon={<Database size={24} />}
+          icon={<Database size={20} />}
           title="Fact Checking"
           description="Validates information accuracy"
-          colorClass="bg-gradient-to-br from-green-500 to-green-600"
+          colorClass="bg-gradient-to-br from-theme-primary to-theme-accent"
         />
         <AgentCard 
-          icon={<Globe size={24} />}
+          icon={<Globe size={20} />}
           title="SEO/GEO Agent"
           description="Optimizes for search engines and geo-targeting"
-          colorClass="bg-gradient-to-br from-amber-500 to-amber-600"
+          colorClass="bg-gradient-to-br from-theme-secondary to-theme-primary"
         />
         <AgentCard 
-          icon={<Layers size={24} />}
+          icon={<Layers size={20} />}
           title="Content Repurposing"
           description="Adapts for different formats and channels"
-          colorClass="bg-gradient-to-br from-red-500 to-red-600"
+          colorClass="bg-gradient-to-br from-theme-accent to-theme-secondary"
         />
       </div>
       
@@ -68,50 +68,50 @@ const MultiAgentDiagram = () => {
             <CarouselItem>
               <div className="p-1">
                 <AgentCard 
-                  icon={<Network size={24} />}
+                  icon={<Network size={20} />}
                   title="Research Agent"
                   description="Collects relevant information from reliable sources"
-                  colorClass="bg-gradient-to-br from-blue-500 to-blue-600"
+                  colorClass="bg-gradient-to-br from-theme-primary to-theme-secondary"
                 />
               </div>
             </CarouselItem>
             <CarouselItem>
               <div className="p-1">
                 <AgentCard 
-                  icon={<BrainCircuit size={24} />}
+                  icon={<BrainCircuit size={20} />}
                   title="Content Generation"
                   description="Creates engaging, original content"
-                  colorClass="bg-gradient-to-br from-purple-500 to-purple-600"
+                  colorClass="bg-gradient-to-br from-theme-secondary to-theme-accent"
                 />
               </div>
             </CarouselItem>
             <CarouselItem>
               <div className="p-1">
                 <AgentCard 
-                  icon={<Database size={24} />}
+                  icon={<Database size={20} />}
                   title="Fact Checking"
                   description="Validates information accuracy"
-                  colorClass="bg-gradient-to-br from-green-500 to-green-600"
+                  colorClass="bg-gradient-to-br from-theme-primary to-theme-accent"
                 />
               </div>
             </CarouselItem>
             <CarouselItem>
               <div className="p-1">
                 <AgentCard 
-                  icon={<Globe size={24} />}
+                  icon={<Globe size={20} />}
                   title="SEO/GEO Agent"
                   description="Optimizes for search engines and geo-targeting"
-                  colorClass="bg-gradient-to-br from-amber-500 to-amber-600"
+                  colorClass="bg-gradient-to-br from-theme-secondary to-theme-primary"
                 />
               </div>
             </CarouselItem>
             <CarouselItem>
               <div className="p-1">
                 <AgentCard 
-                  icon={<Layers size={24} />}
+                  icon={<Layers size={20} />}
                   title="Content Repurposing"
                   description="Adapts for different formats and channels"
-                  colorClass="bg-gradient-to-br from-red-500 to-red-600"
+                  colorClass="bg-gradient-to-br from-theme-accent to-theme-secondary"
                 />
               </div>
             </CarouselItem>
