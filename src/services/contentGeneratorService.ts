@@ -1,4 +1,3 @@
-
 import { FormData, GeneratedContent } from "@/components/content/form/types";
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
@@ -175,7 +174,7 @@ export const deleteContentTemplate = async (id: string): Promise<boolean> => {
 };
 
 // Main function to generate content
-export const generateContent = async (formData: FormData, templateId?: string): Promise<GeneratedContent> => {
+export const generateContent = async (formData: FormData, templateId?: string, provider: 'openai' | 'claude' | 'gemini' = 'openai'): Promise<GeneratedContent> => {
   console.log('Generating content with parameters:', formData);
   
   try {
@@ -190,7 +189,6 @@ export const generateContent = async (formData: FormData, templateId?: string): 
       .from('content_requests')
       .insert({
         prompt: formData.prompt,
-        audience: formData.audience,
         country: formData.country,
         language: formData.language || 'en',
         tone: formData.tone,
@@ -206,40 +204,53 @@ export const generateContent = async (formData: FormData, templateId?: string): 
       
     if (requestError) throw requestError;
 
-    // Call the Supabase Edge Function to generate content
-    const { data, error: functionError } = await supabase.functions.invoke('generate-content', {
-      body: { formData, templateId }
-    });
-    
+    // Call the LLM provider (currently only OpenAI, but structure for others)
+    let llmResponse;
+    if (provider === 'openai') {
+      llmResponse = await supabase.functions.invoke('generate-content', {
+        body: { formData, templateId }
+      });
+    } else if (provider === 'claude') {
+      // Placeholder for future Claude integration
+      throw new Error('Claude integration not implemented yet');
+    } else if (provider === 'gemini') {
+      // Placeholder for future Gemini integration
+      throw new Error('Gemini integration not implemented yet');
+    } else {
+      throw new Error('Unknown LLM provider');
+    }
+    const { data, error: functionError } = llmResponse;
     if (functionError) {
-      console.error('Error calling generate-content function:', functionError);
+      console.error('Error calling content generation function:', functionError);
       throw functionError;
     }
-    
     if (!data) {
       throw new Error('No data returned from content generation function');
     }
-    
-    const generatedContent: GeneratedContent = data;
+    // Ensure citations are present in the output (basic check)
+    if (!data.content || !/\[.*\]\(.*\)/.test(data.content)) {
+      console.warn('No citations found in generated content.');
+      // Optionally, you could throw or annotate here
+    }
     
     // Store the generated content in the database
     const { error: contentError } = await supabase
       .from('generated_content')
       .insert({
         request_id: requestData.id,
-        title: generatedContent.title,
-        content: generatedContent.content,
-        frontmatter: JSON.stringify(generatedContent.frontmatter),  // Convert to string to fix Json type issue
-        word_count: generatedContent.wordCount,
-        seo_score: generatedContent.seoScore,
-        readability_score: generatedContent.readabilityScore,
-        fact_check_score: generatedContent.factCheckScore,
-        reading_time: generatedContent.readingTime
+        title: data.title,
+        content: data.content,
+        frontmatter: JSON.stringify(data.frontmatter),  // Convert to string to fix Json type issue
+        word_count: data.wordCount,
+        seo_score: data.seoScore,
+        readability_score: data.readabilityScore,
+        fact_check_score: data.factCheckScore,
+        reading_time: data.readingTime
       });
       
     if (contentError) throw contentError;
     
-    return generatedContent;
+    return data;
   } catch (error) {
     console.error("Error generating content:", error);
     throw error;
@@ -276,7 +287,6 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
         content_requests (
           prompt,
           language,
-          audience,
           country
         )
       `)

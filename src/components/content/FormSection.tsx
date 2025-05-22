@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -28,6 +27,8 @@ import { useLocationDetection } from './form/useLocationDetection';
 const FormSection = () => {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<boolean>(false);
   const navigate = useNavigate();
   
   // Use the custom location detection hook
@@ -72,10 +73,32 @@ const FormSection = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
+    setSuccess(false);
 
     // Validate form
     if (!formData.prompt) {
-      toast.error('Please enter an AI prompt to rank for');
+      setError('Please enter an AI prompt to rank for');
+      setIsLoading(false);
+      return;
+    }
+    if (!formData.country) {
+      setError('Please select a country');
+      setIsLoading(false);
+      return;
+    }
+    if (!formData.language) {
+      setError('Please select a language');
+      setIsLoading(false);
+      return;
+    }
+    if (formData.toneType === 'description' && !formData.tone) {
+      setError('Please provide a tone description');
+      setIsLoading(false);
+      return;
+    }
+    if (formData.toneType === 'url' && !formData.toneUrl) {
+      setError('Please provide a reference URL for tone');
       setIsLoading(false);
       return;
     }
@@ -87,13 +110,13 @@ const FormSection = () => {
       // Store form data in localStorage (would be better in a real DB)
       localStorage.setItem('contentFormData', JSON.stringify(formData));
       
-      toast.success('Content creation started!');
+      setSuccess(true);
       
       // Navigate to results page
       navigate('/results');
     } catch (error) {
       console.error('Error submitting form:', error);
-      toast.error('Something went wrong. Please try again.');
+      setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -113,12 +136,6 @@ const FormSection = () => {
           {/* AI Prompt */}
           <PromptField 
             value={formData.prompt} 
-            onChange={handleInputChange} 
-          />
-          
-          {/* Target Audience */}
-          <AudienceField 
-            value={formData.audience} 
             onChange={handleInputChange} 
           />
           
@@ -176,6 +193,8 @@ const FormSection = () => {
               </div>
             ) : "Generate Content"}
           </Button>
+          {error && <div className="text-destructive text-center mt-2">{error}</div>}
+          {success && <div className="text-emerald-600 text-center mt-2">Content creation started!</div>}
         </CardFooter>
       </form>
     </Card>
