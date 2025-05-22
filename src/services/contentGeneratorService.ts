@@ -3,6 +3,18 @@ import { FormData, GeneratedContent } from "@/components/content/form/types";
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 
+// Content template type
+export interface ContentTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  system_prompt: string;
+  user_prompt: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Configuration for OpenAI API
 interface OpenAIConfig {
   model: string;
@@ -55,8 +67,103 @@ export const getOpenAIApiKey = async (): Promise<string | null> => {
   }
 };
 
+// Template management functions
+export const getContentTemplates = async (): Promise<ContentTemplate[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('content_templates')
+      .select('*')
+      .order('name');
+      
+    if (error) throw error;
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error retrieving content templates:', error);
+    return [];
+  }
+};
+
+export const getContentTemplate = async (id: string): Promise<ContentTemplate | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('content_templates')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+      
+    if (error) throw error;
+    
+    return data;
+  } catch (error) {
+    console.error('Error retrieving content template:', error);
+    return null;
+  }
+};
+
+export const getDefaultTemplate = async (): Promise<ContentTemplate | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('content_templates')
+      .select('*')
+      .eq('is_default', true)
+      .maybeSingle();
+      
+    if (error) throw error;
+    
+    return data;
+  } catch (error) {
+    console.error('Error retrieving default template:', error);
+    return null;
+  }
+};
+
+export const saveContentTemplate = async (template: Partial<ContentTemplate>): Promise<ContentTemplate | null> => {
+  try {
+    // If setting this template as default, unset default flag on all other templates
+    if (template.is_default) {
+      await supabase
+        .from('content_templates')
+        .update({ is_default: false })
+        .neq('id', template.id || ''); // Use empty string for new templates
+    }
+    
+    const { data, error } = await supabase
+      .from('content_templates')
+      .upsert({
+        ...template,
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+      
+    if (error) throw error;
+    
+    return data;
+  } catch (error) {
+    console.error('Error saving content template:', error);
+    return null;
+  }
+};
+
+export const deleteContentTemplate = async (id: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('content_templates')
+      .delete()
+      .eq('id', id);
+      
+    if (error) throw error;
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting content template:', error);
+    return false;
+  }
+};
+
 // Main function to generate content
-export const generateContent = async (formData: FormData): Promise<GeneratedContent> => {
+export const generateContent = async (formData: FormData, templateId?: string): Promise<GeneratedContent> => {
   console.log('Generating content with parameters:', formData);
   
   try {
@@ -89,7 +196,7 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
 
     // Call the Supabase Edge Function to generate content
     const { data, error: functionError } = await supabase.functions.invoke('generate-content', {
-      body: { formData }
+      body: { formData, templateId }
     });
     
     if (functionError) {

@@ -1,8 +1,14 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+// Initialize Supabase client
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    const { formData } = await req.json();
+    const { formData, templateId } = await req.json();
     
     if (!formData) {
       return new Response(
@@ -25,17 +31,30 @@ serve(async (req) => {
       );
     }
 
-    // Build the system prompt with specific requirements
-    const systemPrompt = `You are an expert content creator that generates high-quality, original markdown content.
+    // Fetch template from database (either specified template or default)
+    let templateQuery = supabase.from('content_templates').select('*');
+    
+    if (templateId) {
+      templateQuery = templateQuery.eq('id', templateId);
+    } else {
+      templateQuery = templateQuery.eq('is_default', true);
+    }
+    
+    const { data: templateData, error: templateError } = await templateQuery.single();
+    
+    if (templateError || !templateData) {
+      console.error("Template error:", templateError);
+      return new Response(
+        JSON.stringify({ error: 'Could not find content template', details: templateError }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
 
-Your responsibilities:
-- Generate ORIGINAL content with unique perspectives, not just summaries of existing material
-- Create content that synthesizes new insights and provides expert-style commentary
-- Structure the content in a way that is engaging and easy to follow
-- Adhere to the tone, word count, and audience requirements
-- Format the output in proper Markdown
-
-The content should be tailored for this audience: ${formData.audience || 'General readers'}
+    // Process template with variable replacements
+    let systemPrompt = templateData.system_prompt;
+    
+    // Add dynamic variables to system prompt
+    systemPrompt += `\n\nThe content should be tailored for this audience: ${formData.audience || 'General readers'}
 Write in this tone: ${formData.tone || 'Informative'}
 The country focus should be: ${formData.country || 'Global'}
 The target language is: ${formData.language || 'English'}
@@ -43,24 +62,16 @@ Word count should be approximately: ${formData.wordCount || 1000} words
 
 ${formData.toneUrl ? `The content should mimic the writing style found at: ${formData.toneUrl}` : ''}`;
 
-    // Create a user prompt with detailed instructions
-    const userPrompt = `Create an original, insightful article about "${formData.prompt}".
-
-Please include:
-1. A compelling headline
-2. An engaging introduction that hooks the reader
-3. Organized sections with clear headings
-4. Expert insights and unique perspectives
-5. Relevant data points or examples to support your points
-6. A strong conclusion
-
-${formData.includeFrontmatter ? 'Include YAML frontmatter with metadata (title, description, tags, slug, author, date).' : ''}
-${formData.includeImages ? 'Describe where images should be placed with suggested alt text and captions.' : ''}
-
-Be original, insightful, and avoid clichés or obvious points. Focus on providing unique value that can't be found in basic web searches about this topic.`;
-
+    // Process user prompt template with variable replacements
+    const userPrompt = templateData.user_prompt
+      .replace('${prompt}', formData.prompt)
+      .replace('${includeFrontmatter ? "Include YAML frontmatter with metadata (title, description, tags, slug, author, date)." : ""}', 
+               formData.includeFrontmatter ? "Include YAML frontmatter with metadata (title, description, tags, slug, author, date)." : "")
+      .replace('${includeImages ? "Describe where images should be placed with suggested alt text and captions." : ""}',
+               formData.includeImages ? "Describe where images should be placed with suggested alt text and captions." : "");
+    
     // Call OpenAI API
-    console.log("Calling OpenAI API...");
+    console.log("Calling OpenAI API with template:", templateData.name);
     const completion = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -151,7 +162,9 @@ Be original, insightful, and avoid clichés or obvious points. Focus on providin
       readingTime: readingTime,
       seoScore: seoScore,
       readabilityScore: readabilityScore,
-      factCheckScore: factCheckScore
+      factCheckScore: factCheckScore,
+      templateId: templateData.id,
+      templateName: templateData.name
     };
 
     return new Response(

@@ -81,6 +81,39 @@ export type Database = {
         }
         Relationships: []
       }
+      content_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          system_prompt: string
+          updated_at: string
+          user_prompt: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          system_prompt: string
+          updated_at?: string
+          user_prompt: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          system_prompt?: string
+          updated_at?: string
+          user_prompt?: string
+        }
+        Relationships: []
+      }
       generated_content: {
         Row: {
           content: string
