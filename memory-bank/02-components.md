@@ -14,6 +14,10 @@
 - **History Page:**
   - List, view, edit, repurpose saved articles/snippets
   - Filters by date, topic, status
+- **Settings Tab/Page:**
+  - View and edit the system prompt template for the Content Creator agent.
+  - Fetches and updates the prompt template from the `content_templates` table in the database.
+  - Simple text area or code editor for editing.
 
 ## Backend Components
 - **Supabase/Firebase DB:** Content, user sessions, history, tones

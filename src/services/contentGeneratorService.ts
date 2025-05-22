@@ -1,4 +1,3 @@
-
 import { FormData, GeneratedContent } from "@/components/content/form/types";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
@@ -56,10 +55,9 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
         tone_type: formData.toneType,
         tone_url: formData.toneUrl,
         word_count: formData.wordCount,
-        include_images: formData.includeImages,
         include_frontmatter: formData.includeFrontmatter,
-        use_ai_media: formData.useAiMedia,
-        audience: formData.audience,
+        media_mode: formData.mediaMode,
+        media_file: formData.mediaFile,
       })
       .select('id')
       .single();

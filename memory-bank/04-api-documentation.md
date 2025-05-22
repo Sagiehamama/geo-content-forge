@@ -26,3 +26,10 @@
 - Auto-publishing to social APIs
 - Multi-language/localization endpoints
 - Collaboration and metrics endpoints
+
+## Settings API
+
+- `GET /api/settings/prompt` — Returns the current system prompt template from the `content_templates` table.
+- `POST /api/settings/prompt` — Updates the system prompt template in the `content_templates` table.
+  - Body: `{ value: string }`
+  - Returns updated prompt.

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 
@@ -34,6 +33,14 @@ const Header = () => {
             }
           >
             History
+          </NavLink>
+          <NavLink 
+            to="/settings" 
+            className={({ isActive }) => 
+              isActive ? "font-medium text-primary" : "text-muted-foreground hover:text-foreground"
+            }
+          >
+            Settings
           </NavLink>
         </nav>
       </div>

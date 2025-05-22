@@ -1,48 +1,41 @@
-
 import { z } from "zod";
 
 export interface FormData {
   prompt: string;
-  tone: string;
-  toneType: 'description' | 'url';
-  toneUrl: string;
-  wordCount: number;
-  language: string;
   country: string;
-  includeImages: boolean;
-  includeFrontmatter: boolean;
-  useAiMedia: boolean;
+  language: string;
+  tone: string;
+  toneUrl: string;
+  toneType: 'description' | 'url';
+  mediaMode: 'auto' | 'manual';
   mediaFile: File | null;
-  audience: string;
+  wordCount: number;
+  includeFrontmatter: boolean;
 }
 
 export const initialFormData: FormData = {
   prompt: '',
-  tone: '',
-  toneType: 'description',
-  toneUrl: '',
-  wordCount: 1000,
-  language: 'en',
   country: '',
-  includeImages: true,
-  includeFrontmatter: true,
-  useAiMedia: true,
+  language: 'en',
+  tone: '',
+  toneUrl: '',
+  toneType: 'description',
+  mediaMode: 'auto',
   mediaFile: null,
-  audience: '',
+  wordCount: 1000,
+  includeFrontmatter: true,
 };
 
 export const formSchema = z.object({
   prompt: z.string().min(1, { message: "Please enter an AI prompt to rank for" }),
-  tone: z.string().optional(),
-  toneType: z.enum(['description', 'url']),
-  toneUrl: z.string().optional(),
-  wordCount: z.number().min(300).max(3000),
-  language: z.string(),
   country: z.string(),
-  includeImages: z.boolean(),
+  language: z.string(),
+  tone: z.string().optional(),
+  toneUrl: z.string().optional(),
+  toneType: z.enum(['description', 'url']),
+  mediaMode: z.enum(['auto', 'manual']),
+  wordCount: z.number().min(300).max(3000),
   includeFrontmatter: z.boolean(),
-  useAiMedia: z.boolean(),
-  audience: z.string().optional(),
 });
 
 export interface GeneratedContent {

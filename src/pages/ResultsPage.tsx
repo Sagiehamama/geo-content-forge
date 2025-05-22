@@ -209,13 +209,6 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
                       </div>
                       
                       <div>
-                        <p className="text-sm font-medium mb-1">Target Audience</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formData.audience || "General"}
-                        </p>
-                      </div>
-                      
-                      <div>
                         <p className="text-sm font-medium mb-1">Country</p>
                         <p className="text-sm text-muted-foreground">
                           {formData.country || "Not specified"}

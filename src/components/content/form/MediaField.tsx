@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -7,17 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 
 interface MediaFieldProps {
-  useAiMedia: boolean;
+  mediaMode: 'auto' | 'manual';
   mediaFile: File | null;
-  onSwitchChange: (checked: boolean) => void;
+  onToggle: (mode: 'auto' | 'manual') => void;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClearFile: () => void;
 }
 
 export const MediaField: React.FC<MediaFieldProps> = ({
-  useAiMedia,
+  mediaMode,
   mediaFile,
-  onSwitchChange,
+  onToggle,
   onFileChange,
   onClearFile
 }) => {
@@ -25,19 +24,18 @@ export const MediaField: React.FC<MediaFieldProps> = ({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <Label htmlFor="useAiMedia" className="block mb-1">Auto-search AI Media</Label>
+          <Label htmlFor="mediaMode" className="block mb-1">Add Media Automatically</Label>
           <p className="text-sm text-muted-foreground">
-            Automatically find relevant images for your content
+            If enabled, the system will find and insert relevant images. If disabled, you can upload your own.
           </p>
         </div>
         <Switch
-          id="useAiMedia"
-          checked={useAiMedia}
-          onCheckedChange={onSwitchChange}
+          id="mediaMode"
+          checked={mediaMode === 'auto'}
+          onCheckedChange={(checked) => onToggle(checked ? 'auto' : 'manual')}
         />
       </div>
-      
-      {!useAiMedia && (
+      {mediaMode === 'manual' && (
         <div className="space-y-2 pt-2">
           <Label htmlFor="mediaFile">Upload Media</Label>
           <div className="flex items-center gap-2">

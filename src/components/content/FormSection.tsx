@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -21,7 +20,6 @@ import { LanguageField } from './form/LanguageField';
 import { ToneField } from './form/ToneField';
 import { MediaField } from './form/MediaField';
 import { WordCountField } from './form/WordCountField';
-import { AudienceField } from './form/AudienceField';
 import { ContentOptionsField } from './form/ContentOptionsField';
 import { useLocationDetection } from './form/useLocationDetection';
 
@@ -69,6 +67,10 @@ const FormSection = () => {
 
   const handleClearFile = () => {
     setFormData({...formData, mediaFile: null});
+  };
+
+  const handleMediaToggle = (mode: 'auto' | 'manual') => {
+    setFormData({ ...formData, mediaMode: mode });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,12 +155,6 @@ const FormSection = () => {
             onChange={(value) => handleSelectChange('language', value)}
           />
           
-          {/* Target Audience */}
-          <AudienceField
-            value={formData.audience}
-            onChange={handleInputChange}
-          />
-          
           {/* Tone of Voice */}
           <ToneField 
             toneType={formData.toneType}
@@ -176,10 +172,10 @@ const FormSection = () => {
           />
           
           {/* AI Media */}
-          <MediaField 
-            useAiMedia={formData.useAiMedia}
+          <MediaField
+            mediaMode={formData.mediaMode}
             mediaFile={formData.mediaFile}
-            onSwitchChange={(checked) => handleSwitchChange('useAiMedia', checked)}
+            onToggle={handleMediaToggle}
             onFileChange={handleFileChange}
             onClearFile={handleClearFile}
           />
