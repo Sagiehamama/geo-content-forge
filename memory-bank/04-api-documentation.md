@@ -33,3 +33,4 @@
 - `POST /api/settings/prompt` — Updates the system prompt template in the `content_templates` table.
   - Body: `{ value: string }`
   - Returns updated prompt.
+- **Media Agent prompt is also stored in the DB and editable via the settings page.**

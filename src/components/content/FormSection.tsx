@@ -166,7 +166,6 @@ const FormSection = () => {
           
           {/* Content Options */}
           <ContentOptionsField 
-            includeImages={formData.includeImages}
             includeFrontmatter={formData.includeFrontmatter}
             onSwitchChange={handleSwitchChange}
           />

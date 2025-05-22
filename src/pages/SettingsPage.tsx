@@ -14,6 +14,7 @@ const tooltipStyle = {
 const SettingsPage = () => {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [userPrompt, setUserPrompt] = useState('');
+  const [mediaAgentPrompt, setMediaAgentPrompt] = useState('');
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,7 +28,7 @@ const SettingsPage = () => {
       setSuccess(false);
       const { data, error } = await supabase
         .from('content_templates')
-        .select('id, system_prompt, user_prompt')
+        .select('id, system_prompt, user_prompt, media_agent_prompt')
         .eq('is_default', true)
         .maybeSingle();
       if (error) {
@@ -35,6 +36,7 @@ const SettingsPage = () => {
       } else if (data) {
         setSystemPrompt(data.system_prompt || '');
         setUserPrompt(data.user_prompt || '');
+        setMediaAgentPrompt(data.media_agent_prompt || '');
         setTemplateId(data.id);
       }
       setLoading(false);
@@ -49,7 +51,7 @@ const SettingsPage = () => {
     setSuccess(false);
     const { error } = await supabase
       .from('content_templates')
-      .update({ system_prompt: systemPrompt, user_prompt: userPrompt, updated_at: new Date().toISOString() })
+      .update({ system_prompt: systemPrompt, user_prompt: userPrompt, media_agent_prompt: mediaAgentPrompt, updated_at: new Date().toISOString() })
       .eq('id', templateId);
     if (error) {
       setError('Failed to save prompt template.');
@@ -88,6 +90,16 @@ const SettingsPage = () => {
                 className="w-full min-h-[120px] border rounded-md p-2 mb-4 font-mono"
                 value={userPrompt}
                 onChange={e => setUserPrompt(e.target.value)}
+                disabled={saving}
+              />
+              <label className="block mb-2 font-medium">
+                Media Agent Prompt
+                <span style={tooltipStyle} title="Prompt for the Media Agent, which analyzes the article and finds relevant images for user selection.">ⓘ</span>
+              </label>
+              <textarea
+                className="w-full min-h-[120px] border rounded-md p-2 mb-4 font-mono"
+                value={mediaAgentPrompt}
+                onChange={e => setMediaAgentPrompt(e.target.value)}
                 disabled={saving}
               />
               <Button onClick={handleSave} disabled={saving}>

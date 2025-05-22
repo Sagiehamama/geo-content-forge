@@ -4,11 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FileInput, Search, Calendar, Tag, Clock, Code } from 'lucide-react';
+import { FileInput, Search, Calendar, Tag, Clock, Code, Info } from 'lucide-react';
 import { languages } from '@/constants/languages';
 import { generateContent } from '@/services/contentGeneratorService';
 import { FormData, GeneratedContent } from '@/components/content/form/types';
 import ReactMarkdown from 'react-markdown';
+import { getMediaSuggestions, MediaImageSpot } from '@/services/mediaAgentService';
+
+const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80';
 
 const ResultsPage = () => {
   const navigate = useNavigate();
@@ -20,6 +23,12 @@ const ResultsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Media suggestions state
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [mediaSpots, setMediaSpots] = useState<MediaImageSpot[]>([]);
+  const [selectedImages, setSelectedImages] = useState<{ [location: string]: string }>({});
   
   useEffect(() => {
     const generateContentAsync = async () => {
@@ -45,6 +54,18 @@ const ResultsPage = () => {
     
     generateContentAsync();
   }, [formData]);
+  
+  // Fetch media suggestions after content is generated
+  useEffect(() => {
+    if (content && content.content) {
+      setMediaLoading(true);
+      setMediaError(null);
+      getMediaSuggestions({ markdown: content.content, title: content.title })
+        .then(spots => setMediaSpots(spots))
+        .catch(err => setMediaError(err.message))
+        .finally(() => setMediaLoading(false));
+    }
+  }, [content]);
   
   const handleCopyContent = () => {
     if (content) {
@@ -101,6 +122,16 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
   
   const handleCreateNew = () => {
     navigate('/');
+  };
+  
+  // Handler for selecting an image for a spot
+  const handleSelectImage = (location: string, url: string) => {
+    setSelectedImages(prev => ({ ...prev, [location]: url }));
+  };
+  
+  // Helper to get the selected image URL or placeholder
+  const getImageForSpot = (location: string) => {
+    return selectedImages[location] || PLACEHOLDER_IMAGE;
   };
   
   return (
@@ -310,6 +341,58 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
                   </p>
                 </CardContent>
               </Card>
+            </div>
+          )}
+          
+          {mediaLoading && (
+            <div className="flex flex-col items-center py-8">
+              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="text-lg font-medium">Finding the best images for your article...</p>
+              <p className="text-muted-foreground mt-2 text-center">This may take a few seconds. We search for relevant, high-quality images for each section.</p>
+            </div>
+          )}
+          {mediaError && (
+            <div className="text-red-600 text-center my-4">{mediaError}</div>
+          )}
+          {mediaSpots.length > 0 && (
+            <div className="my-8">
+              <h2 className="text-xl font-bold mb-4">Choose images for your article</h2>
+              {mediaSpots.map(spot => (
+                <div key={spot.location} className="mb-6">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="font-medium">Image spot:</span>
+                    <span className="text-muted-foreground">{spot.location.replace(/_/g, ' ')}</span>
+                    <Info className="h-4 w-4 text-muted-foreground" title="This is where the image will appear in your article." />
+                  </div>
+                  <div className="flex gap-4 flex-wrap">
+                    {spot.options.map(option => (
+                      <div key={option.url} className={`border rounded p-2 cursor-pointer ${selectedImages[spot.location] === option.url ? 'border-primary ring-2 ring-primary' : 'border-muted'}`} onClick={() => handleSelectImage(spot.location, option.url)} title={option.caption}>
+                        <img src={option.url} alt={option.alt} className="w-32 h-20 object-cover rounded mb-2" />
+                        <div className="text-xs text-muted-foreground mb-1">{option.alt}</div>
+                        <div className="text-xs"><span className="underline" title={`Source: ${option.source}`}>{option.source}</span></div>
+                      </div>
+                    ))}
+                    {/* None/Skip option */}
+                    <div className={`border rounded p-2 cursor-pointer flex flex-col items-center justify-center ${!selectedImages[spot.location] ? 'border-primary ring-2 ring-primary' : 'border-muted'}`} onClick={() => handleSelectImage(spot.location, '')} title="No image (will use a nice placeholder)">
+                      <img src={PLACEHOLDER_IMAGE} alt="No image" className="w-32 h-20 object-cover rounded mb-2 opacity-50" />
+                      <div className="text-xs text-muted-foreground">No image</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="text-sm text-muted-foreground mt-4">Tip: Click an image to select it for each spot. You can skip any spot to use a default placeholder.</div>
+            </div>
+          )}
+          
+          {mediaSpots.length > 0 && (
+            <div className="my-8">
+              <h2 className="text-lg font-semibold mb-2">Preview of selected images</h2>
+              {mediaSpots.map(spot => (
+                <div key={spot.location} className="mb-4 flex items-center gap-4">
+                  <img src={getImageForSpot(spot.location)} alt="Selected or placeholder" className="w-32 h-20 object-cover rounded" />
+                  <span className="text-sm text-muted-foreground">{spot.location.replace(/_/g, ' ')}</span>
+                </div>
+              ))}
             </div>
           )}
         </>

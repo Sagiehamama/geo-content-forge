@@ -26,7 +26,7 @@ export const MediaField: React.FC<MediaFieldProps> = ({
         <div>
           <Label htmlFor="mediaMode" className="block mb-1">Add Media Automatically</Label>
           <p className="text-sm text-muted-foreground">
-            If enabled, the system will find and insert relevant images. If disabled, you can upload your own.
+            If enabled, the system will generate or find relevant images and properly cite them. If disabled, you can upload your own.
           </p>
         </div>
         <Switch
