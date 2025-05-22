@@ -298,52 +298,65 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       }
     }
     
-    // Clean up any "spot X" text that might be appearing
-    processedContent = processedContent.replace(/\bspot\s+\d+\b/gi, '');
+    // More aggressively remove "spot X" text by looking for standalone spot labels
+    processedContent = processedContent.replace(/^\s*spot\s+\d+\s*$/gmi, '');
+    processedContent = processedContent.replace(/\n\s*spot\s+\d+\s*\n/gi, '\n\n');
     
-    // Clean up any standalone line breaks that might be causing layout issues
-    processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
-    
-    // First, look for explicit [IMAGE:location] tags and replace them
-    contextMediaSpots.forEach(spot => {
-      const locationTag = `[IMAGE:${spot.location}]`;
-      if (processedContent.includes(locationTag)) {
-        const imageUrl = contextSelectedImages[spot.location] || PLACEHOLDER_IMAGE;
-        const replacementHtml = `![${spot.location.replace(/_/g, ' ')}](${imageUrl})`;
-        processedContent = processedContent.replace(locationTag, replacementHtml);
-      }
-    });
-    
-    // If no explicit tags were found, inject placeholders at logical spots
-    if (contextMediaSpots.length > 0 && !processedContent.includes('[IMAGE:') && !processedContent.match(/!\[.*?\]\(.*?\)/)) {
-      const paragraphs = processedContent.split('\n\n');
-      
-      // Try to inject after the first paragraph if we have spots
-      if (contextMediaSpots.length > 0 && paragraphs.length > 1) {
-        const firstSpot = contextMediaSpots[0];
-        const imageUrl = contextSelectedImages[firstSpot.location] || PLACEHOLDER_IMAGE;
-        const imgMarkdown = `![${firstSpot.location.replace(/_/g, ' ')}](${imageUrl})`;
+    // Replace with actual image markdown for better rendering
+    if (contextMediaSpots.length > 0) {
+      // First, convert any standalone "spot X" text to image markdown
+      for (let i = 0; i < contextMediaSpots.length; i++) {
+        const spotNumber = i + 1;
+        const spot = contextMediaSpots[i];
+        const regex = new RegExp(`\\bspot\\s*${spotNumber}\\b`, 'gi');
         
-        // Insert after first paragraph
-        paragraphs.splice(1, 0, imgMarkdown);
+        const imageUrl = contextSelectedImages[spot.location] || PLACEHOLDER_IMAGE;
+        const imgMarkdown = `![Image ${spotNumber}](${imageUrl})`;
+        
+        processedContent = processedContent.replace(regex, imgMarkdown);
       }
       
-      // Try to find a section header for the second image
-      if (contextMediaSpots.length > 1) {
-        // Find a section heading (## heading)
-        const headingIndex = paragraphs.findIndex(p => p.startsWith('## '));
-        if (headingIndex >= 0 && headingIndex + 1 < paragraphs.length) {
-          const secondSpot = contextMediaSpots[1];
-          const imageUrl = contextSelectedImages[secondSpot.location] || PLACEHOLDER_IMAGE;
-          const imgMarkdown = `![${secondSpot.location.replace(/_/g, ' ')}](${imageUrl})`;
-          
-          // Insert after the heading's content
-          paragraphs.splice(headingIndex + 1, 0, imgMarkdown);
+      // Look for explicit [IMAGE:location] tags and replace them
+      contextMediaSpots.forEach(spot => {
+        const locationTag = `[IMAGE:${spot.location}]`;
+        if (processedContent.includes(locationTag)) {
+          const imageUrl = contextSelectedImages[spot.location] || PLACEHOLDER_IMAGE;
+          const replacementHtml = `![${spot.location.replace(/_/g, ' ')}](${imageUrl})`;
+          processedContent = processedContent.replace(locationTag, replacementHtml);
         }
-      }
+      });
       
-      // Join everything back together
-      processedContent = paragraphs.join('\n\n');
+      // If no images found at all, inject placeholders at logical spots
+      if (!processedContent.includes('![')) {
+        const paragraphs = processedContent.split('\n\n');
+        
+        // Try to inject after the first paragraph if we have spots
+        if (contextMediaSpots.length > 0 && paragraphs.length > 1) {
+          const firstSpot = contextMediaSpots[0];
+          const imageUrl = contextSelectedImages[firstSpot.location] || PLACEHOLDER_IMAGE;
+          const imgMarkdown = `![${firstSpot.location.replace(/_/g, ' ')}](${imageUrl})`;
+          
+          // Insert after first paragraph
+          paragraphs.splice(1, 0, imgMarkdown);
+        }
+        
+        // Try to find a section header for the second image
+        if (contextMediaSpots.length > 1) {
+          // Find a section heading (## heading)
+          const headingIndex = paragraphs.findIndex(p => p.startsWith('## '));
+          if (headingIndex >= 0 && headingIndex + 1 < paragraphs.length) {
+            const secondSpot = contextMediaSpots[1];
+            const imageUrl = contextSelectedImages[secondSpot.location] || PLACEHOLDER_IMAGE;
+            const imgMarkdown = `![${secondSpot.location.replace(/_/g, ' ')}](${imageUrl})`;
+            
+            // Insert after the heading's content
+            paragraphs.splice(headingIndex + 1, 0, imgMarkdown);
+          }
+        }
+        
+        // Join everything back together
+        processedContent = paragraphs.join('\n\n');
+      }
     }
     
     return processedContent;
@@ -360,30 +373,43 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
     console.log(`Image clicked with src: ${src.substring(0, 30)}...`);
     console.log('Available media spots:', contextMediaSpots.map(s => s.location));
     
-    // Find which spot this image belongs to based on the src
-    const spot = contextMediaSpots.find(spot => {
-      // Case 1: It's a selected image for this spot
-      if (contextSelectedImages[spot.location] === src) {
-        return true;
+    // First try to match by the image src
+    let matchedSpot = contextMediaSpots.find(spot => 
+      contextSelectedImages[spot.location] === src
+    );
+    
+    // If no match and it's a placeholder, try to find a matching spot from the image URL
+    if (!matchedSpot) {
+      // Look for spot_X pattern in the src
+      const spotMatch = src.match(/spot[_\s]?(\d+)/i);
+      if (spotMatch) {
+        const spotNumber = spotMatch[1];
+        matchedSpot = contextMediaSpots.find(s => s.location === `spot_${spotNumber}`);
       }
-      
-      // Case 2: It's a placeholder and this spot doesn't have a selected image
-      if (src === PLACEHOLDER_IMAGE && !contextSelectedImages[spot.location]) {
-        return true;
-      }
-      
-      return false;
-    });
+    }
     
     // If we found a matching spot, open the image selection dialog
-    if (spot) {
-      console.log(`Opening image selection dialog for spot: ${spot.location}`);
-      setSelectedSpot(spot.location);
-    } else {
-      // If no specific match but we have spots, default to the first one
-      console.log(`No matching spot found, defaulting to first spot: ${contextMediaSpots[0].location}`);
-      setSelectedSpot(contextMediaSpots[0].location);
+    if (matchedSpot) {
+      console.log(`Opening image selection dialog for spot: ${matchedSpot.location}`);
+      setSelectedSpot(matchedSpot.location);
+      return;
     }
+    
+    // If no match found yet, try to determine which image in the document was clicked
+    // by index position - this is a fallback
+    const images = document.querySelectorAll('.prose img');
+    const clickedImageIndex = Array.from(images).findIndex(img => img.getAttribute('src') === src);
+    
+    if (clickedImageIndex >= 0 && clickedImageIndex < contextMediaSpots.length) {
+      const spotByPosition = contextMediaSpots[clickedImageIndex];
+      console.log(`Matched image by position, using spot: ${spotByPosition.location}`);
+      setSelectedSpot(spotByPosition.location);
+      return;
+    }
+    
+    // If all else fails, default to the first spot
+    console.log(`No matching spot found, defaulting to first spot: ${contextMediaSpots[0].location}`);
+    setSelectedSpot(contextMediaSpots[0].location);
   };
   
   return (
@@ -457,16 +483,29 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                 img: ({ node, ...props }) => {
                                   // Determine if this is a placeholder image
                                   const isPlaceholder = props.src === PLACEHOLDER_IMAGE;
-                                  // Find which spot this might belong to
-                                  const spotLocation = contextMediaSpots.find(spot => 
-                                    contextSelectedImages[spot.location] === props.src || 
-                                    (!contextSelectedImages[spot.location] && isPlaceholder)
-                                  )?.location;
+                                  // Find which spot this might belong to based on alt text or source
+                                  const spotMatch = props.alt?.match(/spot[_\s]?(\d+)/i) || props.src?.match(/spot[_\s]?(\d+)/i);
                                   
-                                  // Return only the img element without wrapping div to avoid nesting issues
+                                  // Get the spot number if available
+                                  const spotNumber = spotMatch ? spotMatch[1] : null;
+                                  
+                                  // Find the actual media spot object
+                                  const spot = spotNumber 
+                                    ? contextMediaSpots.find(s => s.location === `spot_${spotNumber}`) 
+                                    : contextMediaSpots.find(s => 
+                                        props.alt?.includes(s.location) || 
+                                        contextSelectedImages[s.location] === props.src
+                                      );
+                                  
+                                  // Use the original src or placeholder
+                                  const src = (spot && contextSelectedImages[spot.location]) || props.src;
+                                  
+                                  console.log(`Rendering image: ${props.alt}, isPlaceholder: ${isPlaceholder}, spot: ${spot?.location}`);
+                                  
                                   return (
                                     <img 
                                       {...props} 
+                                      src={src}
                                       className={`rounded-md max-w-full h-auto my-4 cursor-pointer hover:ring-2 hover:ring-primary transition-all ${isPlaceholder ? 'border-2 border-dashed border-blue-300' : ''}`} 
                                       loading="lazy" 
                                       onClick={() => handleImageClick(props.src || '')}
@@ -474,7 +513,11 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                         position: 'relative',
                                         borderWidth: '2px',
                                         borderStyle: 'dashed',
-                                        borderColor: '#93c5fd'
+                                        borderColor: '#93c5fd',
+                                        minHeight: '200px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
                                       } : undefined}
                                       title={isPlaceholder ? "Click to select an image" : props.alt}
                                     />
