@@ -73,6 +73,29 @@ const ResultsPage = () => {
       try {
         console.log(`[${new Date().toISOString()}] Frontend: Calling generateContent`);
         const generatedContent = await generateContent(contextFormData);
+        
+        // Clean up the content before storing it
+        if (generatedContent.content) {
+          // Strip out any code blocks that might contain YAML
+          let cleanContent = generatedContent.content;
+          if (cleanContent.startsWith('```yaml') || cleanContent.startsWith('```yml')) {
+            const codeBlockEnd = cleanContent.indexOf('```', 3);
+            if (codeBlockEnd !== -1) {
+              cleanContent = cleanContent.substring(codeBlockEnd + 3).trim();
+            }
+          }
+          
+          // Also strip out any YAML frontmatter that's in the content
+          if (cleanContent.startsWith('---')) {
+            const frontmatterEndIndex = cleanContent.indexOf('---', 3);
+            if (frontmatterEndIndex > 0) {
+              cleanContent = cleanContent.substring(frontmatterEndIndex + 3).trim();
+            }
+          }
+          
+          generatedContent.content = cleanContent;
+        }
+        
         setGeneratedContent(generatedContent);
       } catch (err: any) {
         console.error('Error generating content:', err);
@@ -329,7 +352,13 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
   // Handler for clicking on an image in the preview
   const handleImageClick = (src: string) => {
     // If no media spots, nothing to do
-    if (contextMediaSpots.length === 0) return;
+    if (contextMediaSpots.length === 0) {
+      console.log('No media spots available for image selection');
+      return;
+    }
+    
+    console.log(`Image clicked with src: ${src.substring(0, 30)}...`);
+    console.log('Available media spots:', contextMediaSpots.map(s => s.location));
     
     // Find which spot this image belongs to based on the src
     const spot = contextMediaSpots.find(spot => {
@@ -348,9 +377,11 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
     
     // If we found a matching spot, open the image selection dialog
     if (spot) {
+      console.log(`Opening image selection dialog for spot: ${spot.location}`);
       setSelectedSpot(spot.location);
     } else {
       // If no specific match but we have spots, default to the first one
+      console.log(`No matching spot found, defaulting to first spot: ${contextMediaSpots[0].location}`);
       setSelectedSpot(contextMediaSpots[0].location);
     }
   };
