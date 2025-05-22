@@ -18,6 +18,7 @@ import { Loader2 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { ImageOption } from '@/components/content/ImageOption';
 
+// Results page component - handles content display and image selection
 // Use a path to an image in the public folder
 const PLACEHOLDER_IMAGE = '/placeholder-select.png'; // Adjust filename if needed
 
