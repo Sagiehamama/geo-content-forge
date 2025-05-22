@@ -7,10 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FileInput, Search, Calendar, Tag, Clock, Code } from 'lucide-react';
 import { languages } from '@/constants/languages';
-import { generateContent, getOpenAIApiKey, setOpenAIApiKey } from '@/services/contentGeneratorService';
+import { generateContent } from '@/services/contentGeneratorService';
 import { FormData, GeneratedContent } from '@/components/content/form/types';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 const ResultsPage = () => {
   const navigate = useNavigate();
@@ -23,32 +21,9 @@ const ResultsPage = () => {
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // API key configuration state
-  const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  
-  useEffect(() => {
-    const loadApiKey = async () => {
-      const apiKeyValue = await getOpenAIApiKey();
-      if (apiKeyValue) {
-        setApiKey(apiKeyValue);
-      }
-    };
-
-    loadApiKey();
-  }, []);
-  
   useEffect(() => {
     const generateContentAsync = async () => {
       try {
-        // Check if we have an API key
-        const apiKeyValue = await getOpenAIApiKey();
-        if (!apiKeyValue) {
-          setShowApiKeyDialog(true);
-          setIsLoading(false);
-          return;
-        }
-        
         // Check if we have valid form data
         if (!formData || !formData.prompt) {
           setError("Missing form data. Please go back and fill out the content form.");
@@ -69,27 +44,6 @@ const ResultsPage = () => {
     
     generateContentAsync();
   }, [formData]);
-  
-  const handleSaveApiKey = async () => {
-    if (apiKey.trim()) {
-      try {
-        await setOpenAIApiKey(apiKey.trim());
-        setShowApiKeyDialog(false);
-        toast.success('API key saved successfully');
-        
-        // Re-trigger content generation
-        setIsLoading(true);
-        const generatedContent = await generateContent(formData);
-        setContent(generatedContent);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error saving API key:', error);
-        toast.error('Failed to save API key. Please try again.');
-      }
-    } else {
-      toast.error('Please enter a valid API key');
-    }
-  };
   
   const handleCopyContent = () => {
     if (content) {
@@ -156,28 +110,6 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
           Review your AI-generated content
         </p>
       </div>
-      
-      {/* API Key Dialog */}
-      <Dialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Configure OpenAI API Key</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground mb-4">
-            Please enter your OpenAI API key to generate content. This key will be stored securely in the database.
-          </p>
-          <Input
-            type="password"
-            placeholder="sk-..."
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            className="mb-4"
-          />
-          <DialogFooter>
-            <Button onClick={handleSaveApiKey}>Save and Generate</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       
       {isLoading ? (
         <Card className="mb-8">
@@ -335,12 +267,12 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
             <Card className="mb-8">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center justify-center py-12">
-                  <p className="text-lg font-medium text-center">API Key Required</p>
+                  <p className="text-lg font-medium text-center">Error</p>
                   <p className="text-muted-foreground mt-2 text-center mb-4">
-                    Please configure your OpenAI API key to generate content
+                    Failed to generate content. Please try again.
                   </p>
-                  <Button onClick={() => setShowApiKeyDialog(true)}>
-                    Configure API Key
+                  <Button onClick={() => navigate('/')}>
+                    Return to Form
                   </Button>
                 </div>
               </CardContent>
