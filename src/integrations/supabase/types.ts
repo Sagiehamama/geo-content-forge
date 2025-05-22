@@ -87,6 +87,7 @@ export type Database = {
           description: string | null
           id: string
           is_default: boolean
+          media_agent_prompt: string | null
           name: string
           system_prompt: string
           updated_at: string
@@ -97,6 +98,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_default?: boolean
+          media_agent_prompt?: string | null
           name: string
           system_prompt: string
           updated_at?: string
@@ -107,6 +109,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_default?: boolean
+          media_agent_prompt?: string | null
           name?: string
           system_prompt?: string
           updated_at?: string
@@ -289,4 +292,4 @@ export const Constants = {
   public: {
     Enums: {},
   },
-} as const
+} as const 

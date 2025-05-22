@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,6 +11,7 @@ import { FormData, GeneratedContent } from '@/components/content/form/types';
 import ReactMarkdown from 'react-markdown';
 import { getMediaSuggestions, MediaImageSpot } from '@/services/mediaAgentService';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80';
 
@@ -35,6 +36,7 @@ const ResultsPage = () => {
   const [mediaSpots, setMediaSpots] = useState<MediaImageSpot[]>([]);
   const [selectedImages, setSelectedImages] = useState<{ [location: string]: string }>({});
   const [mediaRetryCount, setMediaRetryCount] = useState(0);
+  const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
   
   useEffect(() => {
     const generateContentAsync = async () => {
@@ -150,6 +152,38 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
   // Retry handler for media agent
   const handleRetryMedia = () => setMediaRetryCount(c => c + 1);
   
+  // Function to replace image placeholders in Markdown content
+  const getContentWithImagePlaceholders = () => {
+    if (!content?.content) return '';
+    
+    let processedContent = content.content;
+    
+    // For each media spot, add a placeholder if it appears in the content
+    mediaSpots.forEach(spot => {
+      const locationTag = `[IMAGE:${spot.location}]`;
+      if (processedContent.includes(locationTag)) {
+        const imageUrl = selectedImages[spot.location] || PLACEHOLDER_IMAGE;
+        const replacementHtml = `![${spot.location.replace(/_/g, ' ')}](${imageUrl})`;
+        processedContent = processedContent.replace(locationTag, replacementHtml);
+      }
+    });
+    
+    return processedContent;
+  };
+
+  // Handler for clicking on an image in the preview
+  const handleImageClick = (src: string) => {
+    // Find which spot this image belongs to
+    const spot = mediaSpots.find(spot => 
+      selectedImages[spot.location] === src || 
+      (!selectedImages[spot.location] && PLACEHOLDER_IMAGE === src)
+    );
+    
+    if (spot) {
+      setSelectedSpot(spot.location);
+    }
+  };
+  
   return (
     <div className="container py-8">
       <div className="mb-8">
@@ -211,10 +245,33 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
                       </TabsList>
                       
                       <TabsContent value="preview" className="mt-0">
-                        <div className="bg-white rounded-md border p-6 prose max-w-none">
+                        <div className="bg-white rounded-md border p-6 prose prose-slate prose-headings:font-bold prose-headings:text-slate-900 prose-p:text-slate-700 prose-img:rounded-lg max-w-none">
                           {content && (
-                            <ReactMarkdown>
-                              {content.content}
+                            <ReactMarkdown
+                              components={{
+                                a: ({ node, ...props }) => (
+                                  <a {...props} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" />
+                                ),
+                                img: ({ node, ...props }) => (
+                                  <img 
+                                    {...props} 
+                                    className="rounded-md max-w-full h-auto my-4 cursor-pointer hover:ring-2 hover:ring-primary transition-all" 
+                                    loading="lazy" 
+                                    onClick={() => handleImageClick(props.src || '')}
+                                  />
+                                ),
+                                h1: ({ node, ...props }) => (
+                                  <h1 {...props} className="text-2xl font-bold mt-6 mb-4" />
+                                ),
+                                h2: ({ node, ...props }) => (
+                                  <h2 {...props} className="text-xl font-bold mt-5 mb-3" />
+                                ),
+                                h3: ({ node, ...props }) => (
+                                  <h3 {...props} className="text-lg font-bold mt-4 mb-2" />
+                                )
+                              }}
+                            >
+                              {getContentWithImagePlaceholders()}
                             </ReactMarkdown>
                           )}
                         </div>
@@ -377,57 +434,55 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
               )}
             </div>
           )}
-          {mediaSpots.length > 0 && (
-            <div className="my-8">
-              <h2 className="text-xl font-bold mb-4">Choose images for your article</h2>
-              {mediaSpots.map(spot => (
-                <div key={spot.location} className="mb-6">
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="font-medium">Image spot:</span>
-                    <span className="text-muted-foreground">{spot.location.replace(/_/g, ' ')}</span>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="h-4 w-4 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>This is where the image will appear in your article.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <div className="flex gap-4 flex-wrap">
-                    {spot.options.map(option => (
-                      <div key={option.url} className={`border rounded p-2 cursor-pointer ${selectedImages[spot.location] === option.url ? 'border-primary ring-2 ring-primary' : 'border-muted'}`} onClick={() => handleSelectImage(spot.location, option.url)} title={option.caption}>
-                        <img src={option.url} alt={option.alt} className="w-32 h-20 object-cover rounded mb-2" />
-                        <div className="text-xs text-muted-foreground mb-1">{option.alt}</div>
-                        <div className="text-xs"><span className="underline" title={`Source: ${option.source}`}>{option.source}</span></div>
-                      </div>
-                    ))}
-                    {/* None/Skip option */}
-                    <div className={`border rounded p-2 cursor-pointer flex flex-col items-center justify-center ${!selectedImages[spot.location] ? 'border-primary ring-2 ring-primary' : 'border-muted'}`} onClick={() => handleSelectImage(spot.location, '')} title="No image (will use a nice placeholder)">
-                      <img src={PLACEHOLDER_IMAGE} alt="No image" className="w-32 h-20 object-cover rounded mb-2 opacity-50" />
-                      <div className="text-xs text-muted-foreground">No image</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <div className="text-sm text-muted-foreground mt-4">Tip: Click an image to select it for each spot. You can skip any spot to use a default placeholder.</div>
-            </div>
-          )}
-          
-          {mediaSpots.length > 0 && (
-            <div className="my-8">
-              <h2 className="text-lg font-semibold mb-2">Preview of selected images</h2>
-              {mediaSpots.map(spot => (
-                <div key={spot.location} className="mb-4 flex items-center gap-4">
-                  <img src={getImageForSpot(spot.location)} alt="Selected or placeholder" className="w-32 h-20 object-cover rounded" />
-                  <span className="text-sm text-muted-foreground">{spot.location.replace(/_/g, ' ')}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </>
+      )}
+      
+      {mediaSpots.length > 0 && selectedSpot && (
+        <Dialog open={!!selectedSpot} onOpenChange={() => setSelectedSpot(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Select an image</DialogTitle>
+              <DialogDescription>
+                Choose an image for {selectedSpot.replace(/_/g, ' ')}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4 py-4">
+              {mediaSpots.find(spot => spot.location === selectedSpot)?.options.map(option => (
+                <div 
+                  key={option.url} 
+                  className={`border rounded p-2 cursor-pointer transition-all ${selectedImages[selectedSpot] === option.url ? 'border-primary ring-2 ring-primary' : 'border-muted hover:border-primary'}`} 
+                  onClick={() => {
+                    handleSelectImage(selectedSpot, option.url);
+                    setSelectedSpot(null);
+                  }} 
+                  title={option.caption}
+                >
+                  <img src={option.url} alt={option.alt} className="w-full h-32 object-cover rounded mb-2" />
+                  <div className="text-xs text-muted-foreground mb-1">{option.alt}</div>
+                  <div className="text-xs"><span className="underline" title={`Source: ${option.source}`}>{option.source}</span></div>
+                </div>
+              ))}
+              {/* None/Skip option */}
+              <div 
+                className={`border rounded p-2 cursor-pointer flex flex-col items-center justify-center transition-all ${!selectedImages[selectedSpot] ? 'border-primary ring-2 ring-primary' : 'border-muted hover:border-primary'}`} 
+                onClick={() => {
+                  handleSelectImage(selectedSpot, '');
+                  setSelectedSpot(null);
+                }} 
+                title="Use placeholder image"
+              >
+                <img src={PLACEHOLDER_IMAGE} alt="No image" className="w-full h-32 object-cover rounded mb-2 opacity-50" />
+                <div className="text-xs text-muted-foreground">Use placeholder image</div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {mediaSpots.length > 0 && content && (
+        <div className="mt-4 p-4 bg-muted rounded-md text-sm">
+          <p className="font-medium">Image Selection: <span className="font-normal text-muted-foreground">Click on any image in the preview to choose from available options or use the placeholder.</span></p>
+        </div>
       )}
     </div>
   );
