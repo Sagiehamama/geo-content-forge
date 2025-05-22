@@ -23,13 +23,25 @@ const ResultsPage = () => {
   
   // API key configuration state
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
-  const [apiKey, setApiKey] = useState(getOpenAIApiKey() || '');
+  const [apiKey, setApiKey] = useState('');
+  
+  useEffect(() => {
+    const loadApiKey = async () => {
+      const apiKeyValue = await getOpenAIApiKey();
+      if (apiKeyValue) {
+        setApiKey(apiKeyValue);
+      }
+    };
+
+    loadApiKey();
+  }, []);
   
   useEffect(() => {
     const generateContentAsync = async () => {
       try {
         // Check if we have an API key
-        if (!getOpenAIApiKey()) {
+        const apiKeyValue = await getOpenAIApiKey();
+        if (!apiKeyValue) {
           setShowApiKeyDialog(true);
           setIsLoading(false);
           return;
@@ -51,28 +63,22 @@ const ResultsPage = () => {
     generateContentAsync();
   }, [formData]);
   
-  const handleSaveApiKey = () => {
+  const handleSaveApiKey = async () => {
     if (apiKey.trim()) {
-      setOpenAIApiKey(apiKey.trim());
-      setShowApiKeyDialog(false);
-      toast.success('API key saved successfully');
-      
-      // Re-trigger content generation
-      setIsLoading(true);
-      const generateContentAsync = async () => {
-        try {
-          const generatedContent = await generateContent(formData);
-          setContent(generatedContent);
-        } catch (error) {
-          console.error('Error generating content:', error);
-          toast.error('Failed to generate content. Please check your API key.');
-          setContent(mockGeneratedContent);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      
-      generateContentAsync();
+      try {
+        await setOpenAIApiKey(apiKey.trim());
+        setShowApiKeyDialog(false);
+        toast.success('API key saved successfully');
+        
+        // Re-trigger content generation
+        setIsLoading(true);
+        const generatedContent = await generateContent(formData);
+        setContent(generatedContent);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error saving API key:', error);
+        toast.error('Failed to save API key. Please try again.');
+      }
     } else {
       toast.error('Please enter a valid API key');
     }
@@ -151,7 +157,7 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
             <DialogTitle>Configure OpenAI API Key</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground mb-4">
-            Please enter your OpenAI API key to generate content. This key will be stored locally in your browser.
+            Please enter your OpenAI API key to generate content. This key will be stored securely in the database.
           </p>
           <Input
             type="password"
@@ -179,7 +185,6 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
       ) : (
         <>
           {content ? (
-            // ... keep existing code (content display section)
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               <div className="lg:col-span-2">
                 <Card className="h-full">

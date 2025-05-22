@@ -1,37 +1,46 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Search } from "lucide-react";
+import { getContentHistory } from '@/services/contentGeneratorService';
 
-// Mock history data
-const mockHistory = [
-  {
-    id: 1,
-    prompt: 'How to optimize your website for search engines',
-    date: '2025-05-22T14:30:00',
-    wordCount: 1250,
-    language: 'English'
-  },
-  {
-    id: 2,
-    prompt: 'Best practices for content marketing in 2025',
-    date: '2025-05-20T10:15:00',
-    wordCount: 1500,
-    language: 'English'
-  },
-  {
-    id: 3,
-    prompt: 'Social media marketing strategies for small businesses',
-    date: '2025-05-18T16:45:00',
-    wordCount: 950,
-    language: 'English'
-  }
-];
+interface ContentHistoryItem {
+  id: string;
+  title: string;
+  prompt: string;
+  wordCount: number;
+  language: string;
+  generatedAt: string;
+}
 
 const HistoryPage = () => {
   const navigate = useNavigate();
+  const [history, setHistory] = useState<ContentHistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchContentHistory = async () => {
+      try {
+        const contentHistory = await getContentHistory();
+        setHistory(contentHistory.map(item => ({
+          id: item.id,
+          title: item.title,
+          prompt: item.prompt || '',
+          wordCount: item.wordCount,
+          language: item.language || 'en',
+          generatedAt: item.generatedAt
+        })));
+      } catch (error) {
+        console.error('Error fetching content history:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchContentHistory();
+  }, []);
   
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -44,7 +53,7 @@ const HistoryPage = () => {
     }).format(date);
   };
   
-  const handleViewContent = (id: number) => {
+  const handleViewContent = (id: string) => {
     // In a real app, we'd use the ID to load the specific content
     navigate('/results');
   };
@@ -66,21 +75,25 @@ const HistoryPage = () => {
         <Button onClick={handleCreateNew}>Create New Content</Button>
       </div>
       
-      {mockHistory.length > 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : history.length > 0 ? (
         <div className="space-y-6">
-          {mockHistory.map(item => (
+          {history.map(item => (
             <Card key={item.id} className="card-hover">
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-xl mb-2">{item.prompt}</CardTitle>
                     <CardDescription>
-                      Created on {formatDate(item.date)}
+                      Created on {formatDate(item.generatedAt)}
                     </CardDescription>
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium bg-muted px-2.5 py-0.5 rounded-full">
-                      {item.language}
+                      {item.language === 'en' ? 'English' : item.language}
                     </span>
                     <span className="text-sm font-medium bg-muted px-2.5 py-0.5 rounded-full">
                       {item.wordCount} words

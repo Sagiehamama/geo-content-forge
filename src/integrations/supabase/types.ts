@@ -9,7 +9,128 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      app_config: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      content_requests: {
+        Row: {
+          audience: string | null
+          country: string | null
+          created_at: string
+          id: string
+          include_frontmatter: boolean | null
+          include_images: boolean | null
+          language: string
+          prompt: string
+          tone: string | null
+          tone_type: string | null
+          tone_url: string | null
+          use_ai_media: boolean | null
+          word_count: number
+        }
+        Insert: {
+          audience?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          include_frontmatter?: boolean | null
+          include_images?: boolean | null
+          language: string
+          prompt: string
+          tone?: string | null
+          tone_type?: string | null
+          tone_url?: string | null
+          use_ai_media?: boolean | null
+          word_count: number
+        }
+        Update: {
+          audience?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          include_frontmatter?: boolean | null
+          include_images?: boolean | null
+          language?: string
+          prompt?: string
+          tone?: string | null
+          tone_type?: string | null
+          tone_url?: string | null
+          use_ai_media?: boolean | null
+          word_count?: number
+        }
+        Relationships: []
+      }
+      generated_content: {
+        Row: {
+          content: string
+          fact_check_score: number | null
+          frontmatter: Json | null
+          generated_at: string
+          id: string
+          readability_score: string | null
+          reading_time: number | null
+          request_id: string
+          seo_score: number | null
+          title: string
+          word_count: number
+        }
+        Insert: {
+          content: string
+          fact_check_score?: number | null
+          frontmatter?: Json | null
+          generated_at?: string
+          id?: string
+          readability_score?: string | null
+          reading_time?: number | null
+          request_id: string
+          seo_score?: number | null
+          title: string
+          word_count: number
+        }
+        Update: {
+          content?: string
+          fact_check_score?: number | null
+          frontmatter?: Json | null
+          generated_at?: string
+          id?: string
+          readability_score?: string | null
+          reading_time?: number | null
+          request_id?: string
+          seo_score?: number | null
+          title?: string
+          word_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_content_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "content_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

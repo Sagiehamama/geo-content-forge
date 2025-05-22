@@ -1,41 +1,91 @@
 import { FormData, GeneratedContent, mockGeneratedContent } from "@/components/content/form/types";
-
-// Storage key for generated content
-const STORAGE_KEY = "generatedContent";
+import { supabase } from "@/integrations/supabase/client";
+import { v4 as uuidv4 } from "uuid";
 
 // Configuration for OpenAI API
 interface OpenAIConfig {
-  apiKey: string | null;
   model: string;
 }
 
-// Default configuration (apiKey will be set by the user)
+// Default configuration
 const openAIConfig: OpenAIConfig = {
-  apiKey: localStorage.getItem("openai_api_key"),
   model: "gpt-4o",
 };
 
 // Set OpenAI API key (to be called from settings)
-export const setOpenAIApiKey = (apiKey: string) => {
-  localStorage.setItem("openai_api_key", apiKey);
-  openAIConfig.apiKey = apiKey;
+export const setOpenAIApiKey = async (apiKey: string): Promise<void> => {
+  try {
+    // Store in Supabase
+    const { error } = await supabase
+      .from('app_config')
+      .upsert(
+        { 
+          key: 'openai_api_key', 
+          value: apiKey,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'key' }
+      );
+      
+    if (error) throw error;
+    
+    console.log('API key saved successfully');
+  } catch (error) {
+    console.error('Error saving API key:', error);
+    throw error;
+  }
 };
 
 // Get the current OpenAI API key
-export const getOpenAIApiKey = (): string | null => {
-  return openAIConfig.apiKey;
+export const getOpenAIApiKey = async (): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'openai_api_key')
+      .maybeSingle();
+      
+    if (error) throw error;
+    
+    return data?.value || null;
+  } catch (error) {
+    console.error('Error retrieving API key:', error);
+    return null;
+  }
 };
 
 // Main function to generate content
 export const generateContent = async (formData: FormData): Promise<GeneratedContent> => {
   console.log('Generating content with parameters:', formData);
   
-  // Check if we have an API key
-  if (!openAIConfig.apiKey) {
-    throw new Error("OpenAI API key is not set. Please configure it in settings.");
-  }
-  
   try {
+    // Check if we have an API key
+    const apiKey = await getOpenAIApiKey();
+    if (!apiKey) {
+      throw new Error("OpenAI API key is not set. Please configure it in settings.");
+    }
+    
+    // Save the content request to the database
+    const { data: requestData, error: requestError } = await supabase
+      .from('content_requests')
+      .insert({
+        prompt: formData.prompt,
+        audience: formData.audience,
+        country: formData.country,
+        language: formData.language || 'en',
+        tone: formData.tone,
+        tone_type: formData.toneType,
+        tone_url: formData.toneUrl,
+        include_images: formData.includeImages,
+        include_frontmatter: formData.includeFrontmatter,
+        use_ai_media: formData.useAiMedia,
+        word_count: formData.wordCount
+      })
+      .select()
+      .single();
+      
+    if (requestError) throw requestError;
+
     // In a real implementation, we would make an API call to OpenAI
     // For now, we'll simulate the delay and return enhanced mock data
     await new Promise(resolve => setTimeout(resolve, 3000));
@@ -52,8 +102,22 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
       }
     };
     
-    // Store the generated content in localStorage
-    saveGeneratedContent(generatedContent);
+    // Store the generated content in the database
+    const { error: contentError } = await supabase
+      .from('generated_content')
+      .insert({
+        request_id: requestData.id,
+        title: generatedContent.title,
+        content: generatedContent.content,
+        frontmatter: generatedContent.frontmatter,
+        word_count: generatedContent.wordCount,
+        seo_score: generatedContent.seoScore,
+        readability_score: generatedContent.readabilityScore,
+        fact_check_score: generatedContent.factCheckScore,
+        reading_time: generatedContent.readingTime
+      });
+      
+    if (contentError) throw contentError;
     
     return generatedContent;
   } catch (error) {
@@ -62,62 +126,69 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
   }
 };
 
-// Function to connect to OpenAI API (placeholder for now)
-const generateWithOpenAI = async (prompt: string, options: any): Promise<string> => {
-  // This would be replaced with an actual OpenAI API call
-  // For example:
-  /*
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${openAIConfig.apiKey}`
-    },
-    body: JSON.stringify({
-      model: openAIConfig.model,
-      messages: [
-        { role: 'system', content: 'You are a content generator that creates high-quality blog posts.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: options.maxTokens || 1500,
-      temperature: options.temperature || 0.7
-    })
-  });
-  
-  const data = await response.json();
-  return data.choices[0].message.content;
-  */
-  
-  // For now, return mock content
-  return mockGeneratedContent.content;
+// Save generated content to database
+export const saveGeneratedContent = async (content: GeneratedContent): Promise<void> => {
+  try {
+    // This method is now managed by the generateContent function
+    // but keeping the interface for backward compatibility
+    console.log('Content saved to database via generateContent function');
+  } catch (error) {
+    console.error('Error saving content:', error);
+  }
 };
 
-// Save generated content to localStorage
-export const saveGeneratedContent = (content: GeneratedContent): void => {
-  // Get existing content history or initialize new array
-  const contentHistory = getContentHistory();
-  
-  // Add new content with timestamp
-  contentHistory.unshift({
-    ...content,
-    generatedAt: new Date().toISOString()
-  });
-  
-  // Keep only the latest 10 items
-  const updatedHistory = contentHistory.slice(0, 10);
-  
-  // Save back to localStorage
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedHistory));
-};
-
-// Get content history from localStorage
-export const getContentHistory = (): (GeneratedContent & { generatedAt: string })[] => {
-  const storedContent = localStorage.getItem(STORAGE_KEY);
-  return storedContent ? JSON.parse(storedContent) : [];
+// Get content history from database
+export const getContentHistory = async (): Promise<(GeneratedContent & { generatedAt: string })[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('generated_content')
+      .select(`
+        id,
+        title,
+        content,
+        frontmatter,
+        word_count,
+        seo_score,
+        readability_score,
+        fact_check_score,
+        reading_time,
+        generated_at,
+        content_requests (
+          prompt,
+          language,
+          audience,
+          country
+        )
+      `)
+      .order('generated_at', { ascending: false })
+      .limit(10);
+      
+    if (error) throw error;
+    
+    // Transform the data into the expected format
+    return (data || []).map(item => ({
+      id: item.id,
+      title: item.title,
+      content: item.content,
+      frontmatter: item.frontmatter as any,
+      wordCount: item.word_count,
+      seoScore: item.seo_score,
+      readabilityScore: item.readability_score,
+      factCheckScore: item.fact_check_score,
+      readingTime: item.reading_time,
+      generatedAt: item.generated_at,
+      prompt: item.content_requests?.prompt || '',
+      language: item.content_requests?.language || 'en'
+    }));
+  } catch (error) {
+    console.error('Error retrieving content history:', error);
+    return [];
+  }
 };
 
 // Function to convert markdown to HTML for rendering
 export const markdownToHtml = (markdown: string): string => {
+  // Keep the existing implementation
   // This is a very basic implementation
   // In a real app, you'd use a library like marked or remark
   let html = markdown
