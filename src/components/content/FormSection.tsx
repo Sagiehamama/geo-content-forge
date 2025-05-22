@@ -23,25 +23,31 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from 'sonner';
-import { Search, FileInput, Calendar } from "lucide-react";
+import { Search, FileInput, Calendar, Upload } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface FormData {
   prompt: string;
-  location: string;
+  country: string;
   language: string;
   tone: string;
   toneUrl: string;
+  toneType: 'description' | 'url';
   useAiMedia: boolean;
+  mediaFile: File | null;
   wordCount: number;
 }
 
 const initialFormData: FormData = {
   prompt: '',
-  location: '',
+  country: '',
   language: 'en',
   tone: '',
   toneUrl: '',
+  toneType: 'description',
   useAiMedia: true,
+  mediaFile: null,
   wordCount: 1000,
 };
 
@@ -57,13 +63,36 @@ const languages = [
   { code: 'ja', name: 'Japanese' }
 ];
 
+const countries = [
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'CN', name: 'China' },
+  { code: 'IN', name: 'India' },
+  { code: 'BR', name: 'Brazil' },
+  { code: 'MX', name: 'Mexico' },
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'RU', name: 'Russia' },
+  { code: 'KR', name: 'South Korea' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'SE', name: 'Sweden' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'NL', name: 'Netherlands' },
+];
+
 const FormSection = () => {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
-  const [useToneUrl, setUseToneUrl] = useState(false);
   const navigate = useNavigate();
 
-  // Detect user location on component mount
+  // Detect user country on component mount
   useEffect(() => {
     const detectLocation = async () => {
       try {
@@ -77,15 +106,16 @@ const FormSection = () => {
         
         if (response.ok) {
           const data = await response.json();
-          const city = data.address?.city || data.address?.town || data.address?.village || '';
-          const country = data.address?.country || '';
-          const location = [city, country].filter(Boolean).join(', ');
+          const countryCode = data.address?.country_code?.toUpperCase() || '';
           
-          setFormData(prev => ({ ...prev, location }));
+          // Find the country in our list or default to empty
+          if (countryCode && countries.some(country => country.code === countryCode)) {
+            setFormData(prev => ({ ...prev, country: countryCode }));
+          }
         }
       } catch (error) {
         console.error('Error detecting location:', error);
-        // Silent fail, user can manually input location
+        // Silent fail, user can manually select country
       }
     };
 
@@ -112,8 +142,21 @@ const FormSection = () => {
     setFormData({ ...formData, [name]: checked });
   };
 
+  const handleToneTypeChange = (value: string) => {
+    setFormData({ ...formData, toneType: value as 'description' | 'url' });
+  };
+
   const handleSliderChange = (value: number[]) => {
     setFormData({ ...formData, wordCount: value[0] });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setFormData({ ...formData, mediaFile: file });
+    
+    if (file) {
+      toast.success(`File "${file.name}" selected`);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -178,16 +221,25 @@ const FormSection = () => {
             </p>
           </div>
           
-          {/* Location */}
+          {/* Country Dropdown */}
           <div className="space-y-2">
-            <Label htmlFor="location">Location</Label>
-            <Input
-              id="location"
-              name="location"
-              placeholder="Your location for geo-optimization"
-              value={formData.location}
-              onChange={handleInputChange}
-            />
+            <Label htmlFor="country">Country</Label>
+            <Select
+              name="country"
+              value={formData.country}
+              onValueChange={(value) => handleSelectChange('country', value)}
+            >
+              <SelectTrigger id="country">
+                <SelectValue placeholder="Select your target country" />
+              </SelectTrigger>
+              <SelectContent>
+                {countries.map((country) => (
+                  <SelectItem key={country.code} value={country.code}>
+                    {country.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-sm text-muted-foreground">
               Helps optimize content for your geographic area.
             </p>
@@ -201,7 +253,7 @@ const FormSection = () => {
               value={formData.language}
               onValueChange={(value) => handleSelectChange('language', value)}
             >
-              <SelectTrigger>
+              <SelectTrigger id="language">
                 <SelectValue placeholder="Select language" />
               </SelectTrigger>
               <SelectContent>
@@ -216,16 +268,20 @@ const FormSection = () => {
           
           {/* Tone of Voice */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="toneType">Use URL for Tone Reference</Label>
-              <Switch
-                id="toneType"
-                checked={useToneUrl}
-                onCheckedChange={(checked) => setUseToneUrl(checked)}
-              />
+            <div>
+              <Label className="block mb-2">Tone of Voice</Label>
+              <ToggleGroup 
+                type="single" 
+                value={formData.toneType}
+                onValueChange={handleToneTypeChange}
+                className="justify-start mb-4"
+              >
+                <ToggleGroupItem value="description">Description</ToggleGroupItem>
+                <ToggleGroupItem value="url">Reference URL</ToggleGroupItem>
+              </ToggleGroup>
             </div>
             
-            {useToneUrl ? (
+            {formData.toneType === 'url' ? (
               <div className="space-y-2">
                 <Label htmlFor="toneUrl">Reference URL</Label>
                 <div className="relative">
@@ -259,18 +315,57 @@ const FormSection = () => {
           </div>
           
           {/* AI Media */}
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="useAiMedia" className="block mb-1">Auto-search AI Media</Label>
-              <p className="text-sm text-muted-foreground">
-                Automatically find relevant images for your content
-              </p>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="useAiMedia" className="block mb-1">Auto-search AI Media</Label>
+                <p className="text-sm text-muted-foreground">
+                  Automatically find relevant images for your content
+                </p>
+              </div>
+              <Switch
+                id="useAiMedia"
+                checked={formData.useAiMedia}
+                onCheckedChange={(checked) => handleSwitchChange('useAiMedia', checked)}
+              />
             </div>
-            <Switch
-              id="useAiMedia"
-              checked={formData.useAiMedia}
-              onCheckedChange={(checked) => handleSwitchChange('useAiMedia', checked)}
-            />
+            
+            {!formData.useAiMedia && (
+              <div className="space-y-2 pt-2">
+                <Label htmlFor="mediaFile">Upload Media</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="mediaFile"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="w-full flex items-center justify-center gap-2"
+                    onClick={() => document.getElementById('mediaFile')?.click()}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {formData.mediaFile ? formData.mediaFile.name : "Choose file..."}
+                  </Button>
+                  {formData.mediaFile && (
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setFormData({...formData, mediaFile: null})}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Upload your own images to use in the generated content.
+                </p>
+              </div>
+            )}
           </div>
           
           {/* Word Count */}
