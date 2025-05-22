@@ -2,6 +2,7 @@
 import { FormData, GeneratedContent } from "@/components/content/form/types";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
+import { toast } from "sonner";
 
 // Generate content using Edge Function
 export const generateContent = async (formData: FormData): Promise<GeneratedContent | null> => {
@@ -21,6 +22,12 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
     if (!data) {
       console.error('No data returned from generate-content function');
       throw new Error('No content was generated. Please try again.');
+    }
+
+    // Check for specific missing OpenAI API key error
+    if (data.missingKey) {
+      toast.error('The OpenAI API key is not configured in the server environment. Please contact the administrator.');
+      throw new Error('OpenAI API key not configured. Please contact the administrator.');
     }
 
     console.log('Content generated successfully:', data);

@@ -31,9 +31,14 @@ serve(async (req) => {
       );
     }
 
+    // Check for OpenAI API key and provide a more detailed error message
     if (!openAIApiKey) {
+      console.error('OpenAI API key not found in environment variables');
       return new Response(
-        JSON.stringify({ error: 'OpenAI API key is not configured in environment variables' }),
+        JSON.stringify({ 
+          error: 'OpenAI API key is not configured in the Supabase Edge Function secrets. Please contact the administrator.',
+          missingKey: true
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
