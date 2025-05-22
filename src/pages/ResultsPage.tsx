@@ -8,6 +8,7 @@ import { FileInput, Search, Calendar, Tag, Clock, Code } from 'lucide-react';
 import { languages } from '@/constants/languages';
 import { generateContent } from '@/services/contentGeneratorService';
 import { FormData, GeneratedContent } from '@/components/content/form/types';
+import ReactMarkdown from 'react-markdown';
 
 const ResultsPage = () => {
   const navigate = useNavigate();
@@ -167,7 +168,9 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
                       <TabsContent value="preview" className="mt-0">
                         <div className="bg-white rounded-md border p-6 prose max-w-none">
                           {content && (
-                            <div dangerouslySetInnerHTML={{ __html: content.content.replace(/\n/g, '<br>') }} />
+                            <ReactMarkdown>
+                              {content.content}
+                            </ReactMarkdown>
                           )}
                         </div>
                       </TabsContent>
