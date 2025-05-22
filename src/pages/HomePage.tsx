@@ -1,6 +1,7 @@
 
 import React from 'react';
 import FormSection from '@/components/content/FormSection';
+import MultiAgentDiagram from '@/components/content/MultiAgentDiagram';
 
 const HomePage = () => {
   return (
@@ -10,12 +11,16 @@ const HomePage = () => {
           AI-Powered Content Creation
         </h1>
         <p className="text-xl text-muted-foreground">
-          Generate high-quality, SEO-optimized content with just a few clicks
+          Use multi agents to generate high quality, GEO-optimized content
         </p>
       </div>
       
       <div className="mb-12">
         <FormSection />
+      </div>
+
+      <div className="mb-12">
+        <MultiAgentDiagram />
       </div>
     </div>
   );
