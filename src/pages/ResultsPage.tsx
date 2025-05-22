@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -184,7 +183,7 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
                     <div>
                       <p className="text-sm font-medium mb-1">Content Type</p>
                       <p className="text-sm text-muted-foreground">
-                        {formData.contentType && formData.contentType.charAt(0).toUpperCase() + formData.contentType.slice(1)}
+                        Blog Article
                       </p>
                     </div>
                     

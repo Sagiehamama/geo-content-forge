@@ -19,7 +19,7 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
     frontmatter: {
       ...mockGeneratedContent.frontmatter,
       title: formData.prompt.charAt(0).toUpperCase() + formData.prompt.slice(1),
-      tags: [formData.contentType, ...mockGeneratedContent.frontmatter.tags],
+      tags: ["Blog Article", ...mockGeneratedContent.frontmatter.tags],
     }
   };
 };
