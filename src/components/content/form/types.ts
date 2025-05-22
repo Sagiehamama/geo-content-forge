@@ -69,9 +69,11 @@ export interface ContentFrontmatter {
 }
 
 export interface ContentImage {
+  location: string;
   url: string;
   alt: string;
   caption: string;
+  source?: string;
 }
 
 // Mock content is removed as we now have real data

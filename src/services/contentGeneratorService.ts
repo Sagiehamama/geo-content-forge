@@ -48,9 +48,14 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
     console.log('Content generated successfully:', data);
 
     // Store the content request and result in the database
-    await storeContentRequest(formData, data);
+    const dbIds = await storeContentRequest(formData, data);
     
-    return data;
+    return {
+      ...data,
+      id: dbIds.generatedContentId,
+      requestId: dbIds.requestId,
+      images: data.images || [],
+    };
   } catch (error) {
     console.error('Error in generateContent:', error);
     throw error;
@@ -58,7 +63,7 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
 };
 
 // Store content request in database
-const storeContentRequest = async (formData: FormData, generatedContent: GeneratedContent): Promise<void> => {
+const storeContentRequest = async (formData: FormData, generatedContent: GeneratedContent): Promise<{ requestId: string, generatedContentId: string }> => {
   try {
     // First, insert the content request
     const { data: requestData, error: requestError } = await supabase
@@ -73,7 +78,7 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
         word_count: formData.wordCount,
         include_frontmatter: formData.includeFrontmatter,
         media_mode: formData.mediaMode,
-        media_file: formData.mediaFile,
+        media_file: formData.mediaFile ? formData.mediaFile.name : null,
       })
       .select('id')
       .single();
@@ -101,7 +106,7 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
       JSON.stringify([]);
     
     // Then, insert the generated content linked to the request
-    const { error: contentError } = await supabase
+    const { data: newGeneratedContentData, error: contentError } = await supabase
       .from('generated_content')
       .insert({
         request_id: requestId,
@@ -111,20 +116,46 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
         images: imagesJson,
         word_count: generatedContent.wordCount,
         reading_time: generatedContent.readingTime,
-      });
+      })
+      .select('id')
+      .single();
     
     if (contentError) {
       console.error('Error storing generated content:', contentError);
       throw new Error(`Failed to store generated content: ${contentError.message}`);
     }
+
+    if (!newGeneratedContentData) {
+      console.error('No data returned from generated_content insert');
+      throw new Error('Failed to store generated content: No ID returned');
+    }
     
     console.log('Content request and generated content stored successfully');
+    return { requestId, generatedContentId: newGeneratedContentData.id };
   } catch (error) {
     console.error('Error in storeContentRequest:', error);
     // Continue despite storage error - don't disrupt user experience
     // We could implement a retry mechanism here
+    throw error;
   }
 };
+
+// Define a type for the items returned by the Supabase query in getContentHistory
+interface RawContentHistoryItem {
+  id: string;
+  title: string;
+  content: string;
+  frontmatter: string | Record<string, any>; // It's a JSON string from DB, or parsed object
+  images: string | any[]; // JSON string or parsed array
+  word_count: number;
+  reading_time: number;
+  generated_at: string;
+  content_requests: null | { // content_requests can be null if join finds no match, though unlikely with FK
+    id: string;
+    prompt: string;
+    language: string;
+  };
+}
 
 // Get content history from database
 export const getContentHistory = async (): Promise<(GeneratedContent & { generatedAt: string, requestId: string })[]> => {
@@ -132,8 +163,8 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
     const { data, error } = await supabase
       .from('generated_content')
       .select(`
-        *,
-        content_requests (*)
+        id, title, content, frontmatter, images, word_count, reading_time, generated_at,
+        content_requests (id, prompt, language) 
       `)
       .order('generated_at', { ascending: false });
     
@@ -147,7 +178,7 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
     }
     
     // Process the results to match our GeneratedContent type
-    return data.map(item => {
+    return (data as unknown as RawContentHistoryItem[]).map(item => { // Cast data to unknown then to RawContentHistoryItem[]
       // Parse the frontmatter from JSON
       const frontmatterObj = typeof item.frontmatter === 'string' 
         ? JSON.parse(item.frontmatter) 
@@ -172,8 +203,8 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
         images: imagesArr,
         wordCount: item.word_count,
         readingTime: item.reading_time,
-        generatedAt: item.generated_at || new Date().toISOString(), // Fallback if generated_at is missing
-        requestId: item.request_id, // Include the request_id for linking back
+        generatedAt: item.generated_at || new Date().toISOString(),
+        requestId: item.content_requests?.id || '',
         prompt: item.content_requests?.prompt || '',
         language: item.content_requests?.language || 'en'
       };

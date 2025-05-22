@@ -9,15 +9,15 @@ import { languages } from '@/constants/languages';
 import { generateContent } from '@/services/contentGeneratorService';
 import { FormData, GeneratedContent } from '@/components/content/form/types';
 import ReactMarkdown from 'react-markdown';
-import { getMediaSuggestions, MediaImageSpot } from '@/services/mediaAgentService';
+import { getMediaSuggestions, MediaImageSpot, MediaImageOption } from '@/services/mediaAgentService';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useContent } from '@/context/ContentContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 
-// Replace the placeholder with a more obvious placeholder image that's more visually prominent
-const PLACEHOLDER_IMAGE = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22600%22%20height%3D%22400%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23e0e0e0%22%2F%3E%3Crect%20x%3D%2250%22%20y%3D%2250%22%20width%3D%22500%22%20height%3D%22300%22%20fill%3D%22%23f0f0f0%22%20stroke%3D%22%2385c1e9%22%20stroke-width%3D%224%22%20stroke-dasharray%3D%225%2C5%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22180%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22bold%22%20text-anchor%3D%22middle%22%20fill%3D%22%234a90e2%22%3EClick%20to%20select%20image%3C%2Ftext%3E%3Ctext%20x%3D%22300%22%20y%3D%22220%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2218%22%20text-anchor%3D%22middle%22%20fill%3D%22%236b7280%22%3EChoose%20from%20available%20options%3C%2Ftext%3E%3C%2Fsvg%3E';
+// Use a path to an image in the public folder
+const PLACEHOLDER_IMAGE = '/placeholder-select.png'; // Adjust filename if needed
 
 const ResultsPage = () => {
   const navigate = useNavigate();
@@ -29,9 +29,11 @@ const ResultsPage = () => {
     setGeneratedContent,
     mediaSpots: contextMediaSpots,
     setMediaSpots,
-    selectedImages: contextSelectedImages,
-    setSelectedImages,
-    clearContent
+    finalImages: contextFinalImages,
+    updateFinalImage,
+    clearContent,
+    saveContent,
+    isSavingContent
   } = useContent();
   
   // Local state for UI
@@ -42,7 +44,6 @@ const ResultsPage = () => {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [mediaRetryCount, setMediaRetryCount] = useState(0);
   const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
   // If we don't have form data, redirect to home
@@ -205,73 +206,38 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
   const handleSaveContent = async () => {
     if (!contextContent || !contextFormData) return;
     
-    setSaving(true);
     setSaveSuccess(false);
     
     try {
-      // First, save the content request if it doesn't exist yet
-      let requestId = contextFormData.id;
-      
-      if (!requestId) {
-        const { data: requestData, error: requestError } = await supabase
-          .from('content_requests')
-          .insert({
-            prompt: contextFormData.prompt,
-            language: contextFormData.language,
-            word_count: contextFormData.wordCount,
-            country: contextFormData.country,
-            include_frontmatter: contextFormData.includeFrontmatter,
-            include_images: contextFormData.includeImages,
-          })
-          .select('id')
-          .single();
-          
-        if (requestError) throw new Error(requestError.message);
-        requestId = requestData.id;
-      }
-      
-      // Then save the generated content
-      const { error: contentError } = await supabase
-        .from('generated_content')
-        .insert({
-          request_id: requestId,
-          title: contextContent.title,
-          content: contextContent.content,
-          word_count: contextContent.wordCount,
-          reading_time: contextContent.readingTime,
-          frontmatter: JSON.stringify(contextContent.frontmatter),
-        });
-        
-      if (contentError) throw new Error(contentError.message);
-      
+      await saveContent();
       setSaveSuccess(true);
-      toast.success('Content saved to history successfully');
-    } catch (error: any) {
-      toast.error(`Failed to save content: ${error.message}`);
-    } finally {
-      setSaving(false);
+    } catch (err: any) {
+      // Error toast is handled by saveContent in context.
+      // We could add more specific error handling here if needed.
+      setSaveSuccess(false);
     }
   };
   
-  // Handler for selecting an image
-  const handleSelectImage = (url: string) => {
+  // Handler for selecting an image (takes full MediaImageOption or null)
+  const handleSelectImage = (imageOption: MediaImageOption | null) => {
     if (!selectedSpot) return;
     
-    // Update the selected image for this spot
-    setSelectedImages({
-      ...contextSelectedImages,
-      [selectedSpot]: url
-    });
+    updateFinalImage(selectedSpot, imageOption);
     
     // Close the dialog after selecting
     setTimeout(() => setSelectedSpot(null), 300);
     
-    toast.success(`Image selected for ${selectedSpot.replace(/_/g, ' ')}`);
+    if (imageOption && imageOption.url) {
+      toast.success(`Image selected for ${selectedSpot.replace(/_/g, ' ')}`);
+    } else {
+      toast.info(`Image removed for ${selectedSpot.replace(/_/g, ' ')}`);
+    }
   };
   
   // Helper to get the selected image URL or placeholder
-  const getImageForSpot = (location: string) => {
-    return contextSelectedImages[location] || PLACEHOLDER_IMAGE;
+  const getImageForSpot = (location: string): string => {
+    const finalImage = contextFinalImages.find(img => img.location === location);
+    return finalImage?.url || PLACEHOLDER_IMAGE;
   };
   
   // Handler for retrying content generation
@@ -311,7 +277,7 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
         const spot = contextMediaSpots[i];
         const regex = new RegExp(`\\bspot\\s*${spotNumber}\\b`, 'gi');
         
-        const imageUrl = contextSelectedImages[spot.location] || PLACEHOLDER_IMAGE;
+        const imageUrl = getImageForSpot(spot.location);
         const imgMarkdown = `![Image ${spotNumber}](${imageUrl})`;
         
         processedContent = processedContent.replace(regex, imgMarkdown);
@@ -321,8 +287,9 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       contextMediaSpots.forEach(spot => {
         const locationTag = `[IMAGE:${spot.location}]`;
         if (processedContent.includes(locationTag)) {
-          const imageUrl = contextSelectedImages[spot.location] || PLACEHOLDER_IMAGE;
-          const replacementHtml = `![${spot.location.replace(/_/g, ' ')}](${imageUrl})`;
+          const imageUrl = getImageForSpot(spot.location);
+          const altText = spot.options.find(opt => opt.url === imageUrl)?.alt || spot.location.replace(/_/g, ' ');
+          const replacementHtml = `![${altText}](${imageUrl})`;
           processedContent = processedContent.replace(locationTag, replacementHtml);
         }
       });
@@ -334,21 +301,23 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
         // Try to inject after the first paragraph if we have spots
         if (contextMediaSpots.length > 0 && paragraphs.length > 1) {
           const firstSpot = contextMediaSpots[0];
-          const imageUrl = contextSelectedImages[firstSpot.location] || PLACEHOLDER_IMAGE;
-          const imgMarkdown = `![${firstSpot.location.replace(/_/g, ' ')}](${imageUrl})`;
+          const imageUrl = getImageForSpot(firstSpot.location);
+          const altText = firstSpot.options.find(opt => opt.url === imageUrl)?.alt || firstSpot.location.replace(/_/g, ' ');
+          const imgMarkdown = `![${altText}](${imageUrl})`;
           
           // Insert after first paragraph
           paragraphs.splice(1, 0, imgMarkdown);
         }
         
         // Try to find a section header for the second image
-        if (contextMediaSpots.length > 1) {
+        if (contextMediaSpots.length > 1 && paragraphs.length > 2) { // Ensure enough paragraphs
           // Find a section heading (## heading)
           const headingIndex = paragraphs.findIndex(p => p.startsWith('## '));
           if (headingIndex >= 0 && headingIndex + 1 < paragraphs.length) {
             const secondSpot = contextMediaSpots[1];
-            const imageUrl = contextSelectedImages[secondSpot.location] || PLACEHOLDER_IMAGE;
-            const imgMarkdown = `![${secondSpot.location.replace(/_/g, ' ')}](${imageUrl})`;
+            const imageUrl = getImageForSpot(secondSpot.location);
+            const altText = secondSpot.options.find(opt => opt.url === imageUrl)?.alt || secondSpot.location.replace(/_/g, ' ');
+            const imgMarkdown = `![${altText}](${imageUrl})`;
             
             // Insert after the heading's content
             paragraphs.splice(headingIndex + 1, 0, imgMarkdown);
@@ -375,9 +344,10 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
     console.log('Available media spots:', contextMediaSpots.map(s => s.location));
     
     // First try to match by the image src
-    let matchedSpot = contextMediaSpots.find(spot => 
-      contextSelectedImages[spot.location] === src
-    );
+    let matchedSpot = contextMediaSpots.find(spot => {
+      const finalImage = contextFinalImages.find(img => img.location === spot.location);
+      return finalImage?.url === src;
+    });
     
     // If no match and it's a placeholder, try to find a matching spot from the image URL
     if (!matchedSpot) {
@@ -483,42 +453,65 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                 ),
                                 img: ({ node, ...props }) => {
                                   // Determine if this is a placeholder image
-                                  const isPlaceholder = props.src === PLACEHOLDER_IMAGE;
-                                  // Find which spot this might belong to based on alt text or source
-                                  const spotMatch = props.alt?.match(/spot[_\s]?(\d+)/i) || props.src?.match(/spot[_\s]?(\d+)/i);
+                                  const isPlaceholder = props.src === PLACEHOLDER_IMAGE || !props.src;
                                   
-                                  // Get the spot number if available
-                                  const spotNumber = spotMatch ? spotMatch[1] : null;
+                                  // Try to find the spot this image represents.
+                                  // This logic can be complex if props.src is already a final URL.
+                                  let spotLocationToOpenDialogFor: string | undefined = undefined;
+
+                                  // Attempt to find a spot whose currently selected image URL matches props.src
+                                  const spotMatchingSelectedImage = contextFinalImages.find(fi => fi.url === props.src);
+                                  if (spotMatchingSelectedImage) {
+                                    spotLocationToOpenDialogFor = spotMatchingSelectedImage.location;
+                                  } else {
+                                    // Fallback: if it's a generic placeholder, or alt text hints at a spot
+                                    // This part might need refinement based on how placeholders are rendered initially
+                                    const spotFromAlt = contextMediaSpots.find(s => props.alt?.includes(s.location) || props.alt?.includes(s.location.replace(/_/g, ' ')));
+                                    if (spotFromAlt) {
+                                      spotLocationToOpenDialogFor = spotFromAlt.location;
+                                    } else {
+                                        // If it's a known placeholder image, try to derive spot from context
+                                        // This relies on images being rendered in a somewhat predictable order initially
+                                        // Or having specific alt tags from getContentWithImagePlaceholders()
+                                        const imagesInPreview = Array.from(document.querySelectorAll('.prose img'));
+                                        const clickedImageIndex = imagesInPreview.findIndex(img => img.getAttribute('src') === props.src);
+                                        if (clickedImageIndex !== -1 && clickedImageIndex < contextMediaSpots.length) {
+                                           spotLocationToOpenDialogFor = contextMediaSpots[clickedImageIndex].location;
+                                        }
+                                    }
+                                  }
                                   
-                                  // Find the actual media spot object
-                                  const spot = spotNumber 
-                                    ? contextMediaSpots.find(s => s.location === `spot_${spotNumber}`) 
-                                    : contextMediaSpots.find(s => 
-                                        props.alt?.includes(s.location) || 
-                                        contextSelectedImages[s.location] === props.src
-                                      );
-                                  
-                                  // Use the original src or placeholder
-                                  const src = (spot && contextSelectedImages[spot.location]) || props.src;
-                                  
-                                  console.log(`Rendering image: ${props.alt}, isPlaceholder: ${isPlaceholder}, spot: ${spot?.location}`);
+                                  const displaySrc = props.src || PLACEHOLDER_IMAGE;
                                   
                                   return (
                                     <img 
                                       {...props} 
-                                      src={src}
+                                      src={displaySrc}
+                                      alt={props.alt || (spotLocationToOpenDialogFor ? spotLocationToOpenDialogFor.replace(/_/g, ' ') : 'Content image')}
                                       className={`rounded-md max-w-full h-auto my-4 cursor-pointer hover:ring-2 hover:ring-primary transition-all ${isPlaceholder ? 'border-2 border-dashed border-blue-300' : ''}`} 
                                       loading="lazy" 
-                                      onClick={() => handleImageClick(props.src || '')}
+                                      onClick={() => {
+                                        if (spotLocationToOpenDialogFor) {
+                                          setSelectedSpot(spotLocationToOpenDialogFor);
+                                        } else if (contextMediaSpots.length > 0) {
+                                          // Fallback: if no specific spot found, open for the first one.
+                                          // This might happen if an image is somehow rendered without a clear spot association.
+                                          setSelectedSpot(contextMediaSpots[0].location);
+                                          console.warn("Could not determine specific spot for image click, defaulting to first spot.");
+                                        } else {
+                                          toast.info("No image spots defined for this content.");
+                                        }
+                                      }}
                                       style={isPlaceholder ? { 
                                         position: 'relative',
                                         borderWidth: '2px',
                                         borderStyle: 'dashed',
-                                        borderColor: '#93c5fd',
-                                        minHeight: '200px',
+                                        borderColor: '#93c5fd', // A light blue, for example
+                                        minHeight: '200px', // Ensure placeholder has some size
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center'
+                                        justifyContent: 'center',
+                                        // Potentially add a ::before pseudo-element with text via CSS if needed, or an overlay
                                       } : undefined}
                                       title={isPlaceholder ? "Click to select an image" : props.alt}
                                     />
@@ -617,9 +610,9 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                     <CardTitle>Actions</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <Button className="w-full flex items-center gap-2" onClick={handleSaveContent} disabled={saving || saveSuccess}>
+                    <Button className="w-full flex items-center gap-2" onClick={handleSaveContent} disabled={isSavingContent || saveSuccess}>
                       <Save className="h-4 w-4" />
-                      {saving ? 'Saving...' : saveSuccess ? 'Saved' : 'Save to History'}
+                      {isSavingContent ? 'Saving...' : saveSuccess ? 'Saved' : 'Save to History'}
                     </Button>
                     <Button className="w-full" onClick={handleCopyContent}>
                       Copy Content
@@ -719,9 +712,9 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
             {/* Remove Image Option */}
             <Card 
               className={`overflow-hidden cursor-pointer transition-all ${
-                selectedSpot && !contextSelectedImages[selectedSpot] ? 'ring-2 ring-primary' : 'hover:shadow-md'
+                selectedSpot && !contextFinalImages.find(fi => fi.location === selectedSpot) ? 'ring-2 ring-primary' : 'hover:shadow-md'
               }`} 
-              onClick={() => handleSelectImage('')}
+              onClick={() => handleSelectImage(null)}
             >
               <div className="p-2 flex flex-col">
                 <div className="relative aspect-video rounded overflow-hidden bg-gray-50 border-2 border-dashed border-gray-300">
@@ -744,9 +737,9 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
               <Card 
                 key={idx} 
                 className={`overflow-hidden cursor-pointer transition-all ${
-                  contextSelectedImages[selectedSpot] === option.url ? 'ring-2 ring-primary' : 'hover:shadow-md'
+                  contextFinalImages.find(fi => fi.location === selectedSpot)?.url === option.url ? 'ring-2 ring-primary' : 'hover:shadow-md'
                 }`} 
-                onClick={() => handleSelectImage(option.url)}
+                onClick={() => handleSelectImage(option)}
               >
                 <div className="p-2 flex flex-col">
                   <div className="relative aspect-video rounded overflow-hidden bg-gray-100">
@@ -768,7 +761,7 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                         }}
                       />
                     )}
-                    {contextSelectedImages[selectedSpot] === option.url && (
+                    {contextFinalImages.find(fi => fi.location === selectedSpot)?.url === option.url && (
                       <div className="absolute top-2 right-2 bg-primary text-white p-1 rounded-full">
                         <Check className="h-4 w-4" />
                       </div>
