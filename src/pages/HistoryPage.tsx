@@ -1,17 +1,13 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Search } from "lucide-react";
 import { getContentHistory } from '@/services/contentGeneratorService';
+import { GeneratedContent } from '@/components/content/form/types';
 
-interface ContentHistoryItem {
-  id: string;
-  title: string;
-  prompt: string;
-  wordCount: number;
-  language: string;
+// Define the interface for our history items which extends GeneratedContent
+interface ContentHistoryItem extends GeneratedContent {
   generatedAt: string;
 }
 
@@ -24,14 +20,7 @@ const HistoryPage = () => {
     const fetchContentHistory = async () => {
       try {
         const contentHistory = await getContentHistory();
-        setHistory(contentHistory.map(item => ({
-          id: item.id,
-          title: item.title,
-          prompt: item.prompt || '',
-          wordCount: item.wordCount,
-          language: item.language || 'en',
-          generatedAt: item.generatedAt
-        })));
+        setHistory(contentHistory);
       } catch (error) {
         console.error('Error fetching content history:', error);
       } finally {
@@ -116,7 +105,7 @@ const HistoryPage = () => {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => handleViewContent(item.id)}
+                    onClick={() => handleViewContent(item.id ?? '')}
                   >
                     View Content
                   </Button>

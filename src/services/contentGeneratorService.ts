@@ -109,7 +109,7 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
         request_id: requestData.id,
         title: generatedContent.title,
         content: generatedContent.content,
-        frontmatter: generatedContent.frontmatter,
+        frontmatter: JSON.stringify(generatedContent.frontmatter),  // Convert to string to fix Json type issue
         word_count: generatedContent.wordCount,
         seo_score: generatedContent.seoScore,
         readability_score: generatedContent.readabilityScore,
@@ -170,7 +170,10 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
       id: item.id,
       title: item.title,
       content: item.content,
-      frontmatter: item.frontmatter as any,
+      frontmatter: typeof item.frontmatter === 'string' 
+        ? JSON.parse(item.frontmatter) 
+        : item.frontmatter,
+      images: [], // Add empty images array to satisfy the type
       wordCount: item.word_count,
       seoScore: item.seo_score,
       readabilityScore: item.readability_score,

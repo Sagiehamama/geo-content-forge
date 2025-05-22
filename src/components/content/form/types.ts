@@ -49,6 +49,7 @@ export const formSchema = z.object({
 });
 
 export interface GeneratedContent {
+  id?: string; // Make id optional so it can be added after database fetch
   title: string;
   content: string;
   frontmatter: ContentFrontmatter;
@@ -58,6 +59,8 @@ export interface GeneratedContent {
   seoScore: number;
   readabilityScore: string;
   factCheckScore: number;
+  prompt?: string; // Add optional prompt property
+  language?: string; // Add optional language property
 }
 
 // For the content history
