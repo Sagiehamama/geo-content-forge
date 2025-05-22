@@ -1,6 +1,7 @@
 
 import React from 'react';
 import FormSection from '@/components/content/FormSection';
+import { Search, Calendar, FileInput } from 'lucide-react';
 
 const HomePage = () => {
   return (
