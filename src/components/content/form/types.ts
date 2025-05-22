@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export interface FormData {
+  id?: string;
   prompt: string;
   country: string;
   language: string;
@@ -11,6 +12,7 @@ export interface FormData {
   mediaFile: File | null;
   wordCount: number;
   includeFrontmatter: boolean;
+  includeImages?: boolean;
 }
 
 export const initialFormData: FormData = {
@@ -24,6 +26,7 @@ export const initialFormData: FormData = {
   mediaFile: null,
   wordCount: 1000,
   includeFrontmatter: true,
+  includeImages: false,
 };
 
 export const formSchema = z.object({

@@ -127,7 +127,7 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
 };
 
 // Get content history from database
-export const getContentHistory = async (): Promise<(GeneratedContent & { generatedAt: string })[]> => {
+export const getContentHistory = async (): Promise<(GeneratedContent & { generatedAt: string, requestId: string })[]> => {
   try {
     const { data, error } = await supabase
       .from('generated_content')
@@ -172,13 +172,14 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
         images: imagesArr,
         wordCount: item.word_count,
         readingTime: item.reading_time,
-        generatedAt: item.generated_at || item.request_id, // Fallback if generated_at is missing
+        generatedAt: item.generated_at || new Date().toISOString(), // Fallback if generated_at is missing
+        requestId: item.request_id, // Include the request_id for linking back
         prompt: item.content_requests?.prompt || '',
         language: item.content_requests?.language || 'en'
       };
-    }) as (GeneratedContent & { generatedAt: string })[];
+    }) as (GeneratedContent & { generatedAt: string, requestId: string })[];
   } catch (error) {
     console.error('Error retrieving content history:', error);
-    return [] as (GeneratedContent & { generatedAt: string })[];
+    return [] as (GeneratedContent & { generatedAt: string, requestId: string })[];
   }
 };

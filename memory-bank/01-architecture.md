@@ -3,6 +3,8 @@
 The system is a modular, agent-based web application:
 
 - **Frontend:** React (or similar) web UI, hosted on Netlify.
+  - **State Management:** React Context API manages state persistence across navigation
+  - **UI Components:** Shadcn UI library for consistent design
 - **Backend:** Node.js or Python (FastAPI), integrates with LLM providers, vector store, and scraping agent.
 - **Database:** Supabase or Firebase for content, user sessions, history, saved tones, etc.
 - **Agents:**
@@ -15,3 +17,11 @@ The system is a modular, agent-based web application:
 
 **Workflow Pipeline:**
 Input JSON → Content Generator → QA Agent → Optimizer → Markdown Output → **Media Agent (image search/selection)** → User Review/Save → (Optional) Repurpose Agent → Publish
+
+**Data Flow:**
+1. User inputs content parameters (stored in ContentContext)
+2. System generates content (maintained in ContentContext)
+3. Media Agent provides image options (stored in ContentContext)
+4. User selects images and reviews content (selections in ContentContext)
+5. User saves content to database
+6. History page displays saved content from database

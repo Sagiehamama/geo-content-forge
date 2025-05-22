@@ -2,32 +2,39 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Search } from "lucide-react";
+import { Search, Trash2, Eye } from "lucide-react";
 import { getContentHistory } from '@/services/contentGeneratorService';
 import { GeneratedContent } from '@/components/content/form/types';
+import { useContent } from '@/context/ContentContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // Define the interface for our history items which extends GeneratedContent
 interface ContentHistoryItem extends GeneratedContent {
   generatedAt: string;
+  requestId: string;
 }
 
 const HistoryPage = () => {
   const navigate = useNavigate();
   const [history, setHistory] = useState<ContentHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { setFormData, setGeneratedContent, clearContent } = useContent();
+  
+  const fetchContentHistory = async () => {
+    setIsLoading(true);
+    try {
+      const contentHistory = await getContentHistory();
+      setHistory(contentHistory);
+    } catch (error) {
+      console.error('Error fetching content history:', error);
+      toast.error('Failed to load content history');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   useEffect(() => {
-    const fetchContentHistory = async () => {
-      try {
-        const contentHistory = await getContentHistory();
-        setHistory(contentHistory);
-      } catch (error) {
-        console.error('Error fetching content history:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
     fetchContentHistory();
   }, []);
   
@@ -42,12 +49,67 @@ const HistoryPage = () => {
     }).format(date);
   };
   
-  const handleViewContent = (id: string) => {
-    // In a real app, we'd use the ID to load the specific content
-    navigate('/results');
+  const handleViewContent = async (item: ContentHistoryItem) => {
+    try {
+      // First, clear any existing content
+      clearContent();
+      
+      // Get the associated request to populate form data
+      const { data: requestData, error: requestError } = await supabase
+        .from('content_requests')
+        .select('*')
+        .eq('id', item.requestId)
+        .single();
+        
+      if (requestError) throw new Error(requestError.message);
+      
+      // Set form data in context
+      setFormData({
+        id: requestData.id,
+        prompt: requestData.prompt,
+        language: requestData.language,
+        country: requestData.country,
+        toneType: (requestData.tone_type as 'description' | 'url') || 'description',
+        tone: requestData.tone || '',
+        toneUrl: requestData.tone_url || '',
+        wordCount: requestData.word_count,
+        includeFrontmatter: requestData.include_frontmatter || false,
+        includeImages: requestData.include_images || false,
+        mediaMode: 'auto', // Default
+        mediaFile: null,
+      });
+      
+      // Set the content in context
+      setGeneratedContent(item);
+      
+      // Navigate to results page to view the content
+      navigate('/results');
+    } catch (error) {
+      console.error('Error loading content:', error);
+      toast.error('Failed to load content');
+    }
+  };
+  
+  const handleDeleteContent = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('generated_content')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw new Error(error.message);
+      
+      toast.success('Content deleted successfully');
+      // Refresh the history list
+      fetchContentHistory();
+    } catch (error) {
+      console.error('Error deleting content:', error);
+      toast.error('Failed to delete content');
+    }
   };
   
   const handleCreateNew = () => {
+    clearContent(); // Clear any existing content
     navigate('/');
   };
   
@@ -75,7 +137,7 @@ const HistoryPage = () => {
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <CardTitle className="text-xl mb-2">{item.prompt}</CardTitle>
+                    <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
                     <CardDescription>
                       Created on {formatDate(item.generatedAt)}
                     </CardDescription>
@@ -90,23 +152,29 @@ const HistoryPage = () => {
                   </div>
                 </div>
               </CardHeader>
+              <CardContent className="pb-0">
+                <p className="text-muted-foreground line-clamp-2">
+                  {item.prompt}
+                </p>
+              </CardContent>
               <CardFooter className="pt-4">
                 <div className="flex justify-end w-full space-x-3">
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => {
-                      /* Would implement delete functionality here */
-                      alert('Delete functionality would be implemented here');
-                    }}
+                    onClick={() => handleDeleteContent(item.id || '')}
+                    className="flex items-center gap-1"
                   >
+                    <Trash2 className="h-4 w-4" />
                     Delete
                   </Button>
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => handleViewContent(item.id ?? '')}
+                    onClick={() => handleViewContent(item)}
+                    className="flex items-center gap-1"
                   >
+                    <Eye className="h-4 w-4" />
                     View Content
                   </Button>
                 </div>

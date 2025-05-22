@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2 } from "lucide-react";
@@ -22,43 +22,52 @@ import { MediaField } from './form/MediaField';
 import { WordCountField } from './form/WordCountField';
 import { ContentOptionsField } from './form/ContentOptionsField';
 import { useLocationDetection } from './form/useLocationDetection';
+import { useContent } from '@/context/ContentContext';
 
 const FormSection = () => {
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const { formData: contextFormData, setFormData: setContextFormData, clearContent } = useContent();
+  const [localFormData, setLocalFormData] = useState<FormData>(contextFormData || initialFormData);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
   const navigate = useNavigate();
   
   // Use the custom location detection hook
-  const { isDetectingLocation } = useLocationDetection(setFormData);
+  const { isDetectingLocation } = useLocationDetection(setLocalFormData);
+
+  // Initialize local form from context if available
+  useEffect(() => {
+    if (contextFormData) {
+      setLocalFormData(contextFormData);
+    }
+  }, [contextFormData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setLocalFormData({ ...localFormData, [name]: value });
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData({ ...formData, [name]: value });
+    setLocalFormData({ ...localFormData, [name]: value });
   };
 
   const handleSwitchChange = (name: string, checked: boolean) => {
-    setFormData({ ...formData, [name]: checked });
+    setLocalFormData({ ...localFormData, [name]: checked });
   };
 
   const handleToneTypeChange = (value: string) => {
     if (value === 'description' || value === 'url') {
-      setFormData({ ...formData, toneType: value });
+      setLocalFormData({ ...localFormData, toneType: value });
     }
   };
 
   const handleSliderChange = (value: number[]) => {
-    setFormData({ ...formData, wordCount: value[0] });
+    setLocalFormData({ ...localFormData, wordCount: value[0] });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
-    setFormData({ ...formData, mediaFile: file });
+    setLocalFormData({ ...localFormData, mediaFile: file });
     
     if (file) {
       toast.success(`File "${file.name}" selected`);
@@ -66,11 +75,11 @@ const FormSection = () => {
   };
 
   const handleClearFile = () => {
-    setFormData({...formData, mediaFile: null});
+    setLocalFormData({...localFormData, mediaFile: null});
   };
 
   const handleMediaToggle = (mode: 'auto' | 'manual') => {
-    setFormData({ ...formData, mediaMode: mode });
+    setLocalFormData({ ...localFormData, mediaMode: mode });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,38 +89,38 @@ const FormSection = () => {
     setSuccess(false);
 
     // Validate form
-    if (!formData.prompt) {
+    if (!localFormData.prompt) {
       setError('Please enter an AI prompt to rank for');
       setIsLoading(false);
       return;
     }
-    if (!formData.country) {
+    if (!localFormData.country) {
       setError('Please select a country');
       setIsLoading(false);
       return;
     }
-    if (!formData.language) {
+    if (!localFormData.language) {
       setError('Please select a language');
       setIsLoading(false);
       return;
     }
-    if (formData.toneType === 'description' && !formData.tone) {
+    if (localFormData.toneType === 'description' && !localFormData.tone) {
       setError('Please provide a tone description');
       setIsLoading(false);
       return;
     }
-    if (formData.toneType === 'url' && !formData.toneUrl) {
+    if (localFormData.toneType === 'url' && !localFormData.toneUrl) {
       setError('Please provide a reference URL for tone');
       setIsLoading(false);
       return;
     }
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Clear any previous content
+      clearContent();
       
-      // Store form data in localStorage (would be better in a real DB)
-      localStorage.setItem('contentFormData', JSON.stringify(formData));
+      // Update context with new form data
+      setContextFormData(localFormData);
       
       setSuccess(true);
       
@@ -138,42 +147,42 @@ const FormSection = () => {
         <CardContent className="space-y-6">
           {/* AI Prompt */}
           <PromptField 
-            value={formData.prompt} 
+            value={localFormData.prompt} 
             onChange={handleInputChange} 
           />
           
           {/* Country Dropdown */}
           <CountryField 
-            value={formData.country}
+            value={localFormData.country}
             onChange={(value) => handleSelectChange('country', value)}
             isDetecting={isDetectingLocation}
           />
           
           {/* Language */}
           <LanguageField 
-            value={formData.language}
+            value={localFormData.language}
             onChange={(value) => handleSelectChange('language', value)}
           />
           
           {/* Tone of Voice */}
           <ToneField 
-            toneType={formData.toneType}
-            tone={formData.tone}
-            toneUrl={formData.toneUrl}
+            toneType={localFormData.toneType}
+            tone={localFormData.tone}
+            toneUrl={localFormData.toneUrl}
             onToneTypeChange={handleToneTypeChange}
             onInputChange={handleInputChange}
           />
           
           {/* Content Options */}
           <ContentOptionsField 
-            includeFrontmatter={formData.includeFrontmatter}
+            includeFrontmatter={localFormData.includeFrontmatter}
             onSwitchChange={handleSwitchChange}
           />
           
           {/* AI Media */}
           <MediaField
-            mediaMode={formData.mediaMode}
-            mediaFile={formData.mediaFile}
+            mediaMode={localFormData.mediaMode}
+            mediaFile={localFormData.mediaFile}
             onToggle={handleMediaToggle}
             onFileChange={handleFileChange}
             onClearFile={handleClearFile}
@@ -181,7 +190,7 @@ const FormSection = () => {
           
           {/* Word Count */}
           <WordCountField 
-            value={formData.wordCount}
+            value={localFormData.wordCount}
             onChange={handleSliderChange}
           />
         </CardContent>
