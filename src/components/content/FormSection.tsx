@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Loader2 } from "lucide-react";
 import { 
   Card, 
   CardContent, 
@@ -8,176 +11,25 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-import { toast } from 'sonner';
-import { Search, FileInput, Upload, Loader2 } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-interface FormData {
-  prompt: string;
-  country: string;
-  language: string;
-  tone: string;
-  toneUrl: string;
-  toneType: 'description' | 'url';
-  useAiMedia: boolean;
-  mediaFile: File | null;
-  wordCount: number;
-}
-
-const initialFormData: FormData = {
-  prompt: '',
-  country: '',
-  language: 'en',
-  tone: '',
-  toneUrl: '',
-  toneType: 'description',
-  useAiMedia: true,
-  mediaFile: null,
-  wordCount: 1000,
-};
-
-const languages = [
-  { code: 'en', name: 'English' },
-  { code: 'es', name: 'Spanish' },
-  { code: 'fr', name: 'French' },
-  { code: 'de', name: 'German' },
-  { code: 'it', name: 'Italian' },
-  { code: 'pt', name: 'Portuguese' },
-  { code: 'ru', name: 'Russian' },
-  { code: 'zh', name: 'Chinese' },
-  { code: 'ja', name: 'Japanese' }
-];
-
-const countries = [
-  { code: 'US', name: 'United States' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'CA', name: 'Canada' },
-  { code: 'AU', name: 'Australia' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'FR', name: 'France' },
-  { code: 'ES', name: 'Spain' },
-  { code: 'IT', name: 'Italy' },
-  { code: 'JP', name: 'Japan' },
-  { code: 'CN', name: 'China' },
-  { code: 'IN', name: 'India' },
-  { code: 'BR', name: 'Brazil' },
-  { code: 'MX', name: 'Mexico' },
-  { code: 'ZA', name: 'South Africa' },
-  { code: 'RU', name: 'Russia' },
-  { code: 'KR', name: 'South Korea' },
-  { code: 'SG', name: 'Singapore' },
-  { code: 'AE', name: 'United Arab Emirates' },
-  { code: 'SE', name: 'Sweden' },
-  { code: 'CH', name: 'Switzerland' },
-  { code: 'NL', name: 'Netherlands' },
-];
+// Import form types and custom components
+import { FormData, initialFormData } from './form/types';
+import { PromptField } from './form/PromptField';
+import { CountryField } from './form/CountryField';
+import { LanguageField } from './form/LanguageField';
+import { ToneField } from './form/ToneField';
+import { MediaField } from './form/MediaField';
+import { WordCountField } from './form/WordCountField';
+import { useLocationDetection } from './form/useLocationDetection';
 
 const FormSection = () => {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDetectingLocation, setIsDetectingLocation] = useState(true);
   const navigate = useNavigate();
-
-  // Detect user country on component mount - improved implementation
-  useEffect(() => {
-    const detectLocation = async () => {
-      setIsDetectingLocation(true);
-      
-      try {
-        // Try using IP-based geolocation first - no permission required
-        const ipResponse = await fetch('https://ipapi.co/json/');
-        
-        if (ipResponse.ok) {
-          const ipData = await ipResponse.json();
-          const countryCode = ipData.country_code;
-          
-          // Check if the country is in our list
-          if (countryCode && countries.some(country => country.code === countryCode)) {
-            setFormData(prev => ({ ...prev, country: countryCode }));
-            console.log(`Country detected via IP: ${countryCode}`);
-            setIsDetectingLocation(false);
-            return;
-          }
-        }
-        
-        // Fallback to browser geolocation API if IP-based detection fails
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              try {
-                const { latitude, longitude } = position.coords;
-                
-                const response = await fetch(
-                  `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-                );
-                
-                if (response.ok) {
-                  const data = await response.json();
-                  const countryCode = data.address?.country_code?.toUpperCase() || '';
-                  
-                  // Find the country in our list
-                  if (countryCode && countries.some(country => country.code === countryCode)) {
-                    setFormData(prev => ({ ...prev, country: countryCode }));
-                    console.log(`Country detected via browser geolocation: ${countryCode}`);
-                  } else {
-                    // Default to US if country not in list
-                    setFormData(prev => ({ ...prev, country: 'US' }));
-                    console.log('Country not found in list, defaulting to US');
-                  }
-                } else {
-                  // Default if geocoding fails
-                  setFormData(prev => ({ ...prev, country: 'US' }));
-                  console.log('Geocoding failed, defaulting to US');
-                }
-              } catch (error) {
-                console.error('Error with reverse geocoding:', error);
-                setFormData(prev => ({ ...prev, country: 'US' }));
-                console.log('Error occurred, defaulting to US');
-              }
-            },
-            (error) => {
-              console.error('Geolocation permission denied or error:', error);
-              setFormData(prev => ({ ...prev, country: 'US' }));
-              console.log('Geolocation error, defaulting to US');
-            },
-            { timeout: 5000, maximumAge: 0 }
-          );
-        } else {
-          // Geolocation not supported
-          setFormData(prev => ({ ...prev, country: 'US' }));
-          console.log('Geolocation not supported, defaulting to US');
-        }
-      } catch (error) {
-        console.error('Error detecting location:', error);
-        setFormData(prev => ({ ...prev, country: 'US' }));
-        console.log('Location detection error, defaulting to US');
-      } finally {
-        setIsDetectingLocation(false);
-      }
-    };
-
-    // Try to detect location
-    detectLocation();
-    
-    // Try to detect browser language
-    const browserLang = navigator.language.split('-')[0];
-    if (languages.some(lang => lang.code === browserLang)) {
-      setFormData(prev => ({ ...prev, language: browserLang }));
-    }
-  }, []);
+  
+  // Use the custom location detection hook
+  const { isDetectingLocation } = useLocationDetection(setFormData);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -193,7 +45,9 @@ const FormSection = () => {
   };
 
   const handleToneTypeChange = (value: string) => {
-    setFormData({ ...formData, toneType: value as 'description' | 'url' });
+    if (value) {
+      setFormData({ ...formData, toneType: value as 'description' | 'url' });
+    }
   };
 
   const handleSliderChange = (value: number[]) => {
@@ -209,6 +63,10 @@ const FormSection = () => {
     }
   };
 
+  const handleClearFile = () => {
+    setFormData({...formData, mediaFile: null});
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -220,8 +78,6 @@ const FormSection = () => {
       return;
     }
 
-    // Here we would normally send the data to an API
-    // For now, let's simulate a successful response
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -253,206 +109,57 @@ const FormSection = () => {
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-6">
           {/* AI Prompt */}
-          <div className="space-y-2">
-            <Label htmlFor="prompt">AI Prompt to Rank For <span className="text-destructive">*</span></Label>
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="prompt"
-                name="prompt"
-                placeholder="Enter the search query you want to rank for..."
-                className="pl-8"
-                value={formData.prompt}
-                onChange={handleInputChange}
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              This is the search term your content will be optimized for.
-            </p>
-          </div>
+          <PromptField 
+            value={formData.prompt} 
+            onChange={handleInputChange} 
+          />
           
           {/* Country Dropdown */}
-          <div className="space-y-2">
-            <Label htmlFor="country">Country</Label>
-            <div className="relative">
-              <Select
-                name="country"
-                value={formData.country}
-                onValueChange={(value) => handleSelectChange('country', value)}
-                disabled={isDetectingLocation}
-              >
-                <SelectTrigger id="country" className={isDetectingLocation ? "bg-muted" : ""}>
-                  {isDetectingLocation ? (
-                    <div className="flex items-center">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      <span>Detecting your location...</span>
-                    </div>
-                  ) : (
-                    <SelectValue placeholder="Select your target country" />
-                  )}
-                </SelectTrigger>
-                <SelectContent>
-                  {countries.map((country) => (
-                    <SelectItem key={country.code} value={country.code}>
-                      {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Helps optimize content for your geographic area.
-            </p>
-          </div>
+          <CountryField 
+            value={formData.country}
+            onChange={(value) => handleSelectChange('country', value)}
+            isDetecting={isDetectingLocation}
+          />
           
           {/* Language */}
-          <div className="space-y-2">
-            <Label htmlFor="language">Language</Label>
-            <Select
-              name="language"
-              value={formData.language}
-              onValueChange={(value) => handleSelectChange('language', value)}
-            >
-              <SelectTrigger id="language">
-                <SelectValue placeholder="Select language" />
-              </SelectTrigger>
-              <SelectContent>
-                {languages.map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    {lang.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <LanguageField 
+            value={formData.language}
+            onChange={(value) => handleSelectChange('language', value)}
+          />
           
           {/* Tone of Voice */}
-          <div className="space-y-4">
-            <div>
-              <Label className="block mb-2">Tone of Voice</Label>
-              <ToggleGroup 
-                type="single" 
-                value={formData.toneType}
-                onValueChange={handleToneTypeChange}
-                className="justify-start mb-4"
-              >
-                <ToggleGroupItem value="description">Description</ToggleGroupItem>
-                <ToggleGroupItem value="url">Reference URL</ToggleGroupItem>
-              </ToggleGroup>
-            </div>
-            
-            {formData.toneType === 'url' ? (
-              <div className="space-y-2">
-                <Label htmlFor="toneUrl">Reference URL</Label>
-                <div className="relative">
-                  <FileInput className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="toneUrl"
-                    name="toneUrl"
-                    placeholder="https://example.com/content-with-desired-tone"
-                    className="pl-8"
-                    value={formData.toneUrl}
-                    onChange={handleInputChange}
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  We'll analyze this content to match its tone and style.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="tone">Tone Description</Label>
-                <Textarea
-                  id="tone"
-                  name="tone"
-                  placeholder="Describe the desired tone (e.g., professional, friendly, authoritative)..."
-                  value={formData.tone}
-                  onChange={handleInputChange}
-                  rows={3}
-                />
-              </div>
-            )}
-          </div>
+          <ToneField 
+            toneType={formData.toneType}
+            tone={formData.tone}
+            toneUrl={formData.toneUrl}
+            onToneTypeChange={handleToneTypeChange}
+            onInputChange={handleInputChange}
+          />
           
           {/* AI Media */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="useAiMedia" className="block mb-1">Auto-search AI Media</Label>
-                <p className="text-sm text-muted-foreground">
-                  Automatically find relevant images for your content
-                </p>
-              </div>
-              <Switch
-                id="useAiMedia"
-                checked={formData.useAiMedia}
-                onCheckedChange={(checked) => handleSwitchChange('useAiMedia', checked)}
-              />
-            </div>
-            
-            {!formData.useAiMedia && (
-              <div className="space-y-2 pt-2">
-                <Label htmlFor="mediaFile">Upload Media</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="mediaFile"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="w-full flex items-center justify-center gap-2"
-                    onClick={() => document.getElementById('mediaFile')?.click()}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {formData.mediaFile ? formData.mediaFile.name : "Choose file..."}
-                  </Button>
-                  {formData.mediaFile && (
-                    <Button 
-                      type="button" 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => setFormData({...formData, mediaFile: null})}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Upload your own images to use in the generated content.
-                </p>
-              </div>
-            )}
-          </div>
+          <MediaField 
+            useAiMedia={formData.useAiMedia}
+            mediaFile={formData.mediaFile}
+            onSwitchChange={(checked) => handleSwitchChange('useAiMedia', checked)}
+            onFileChange={handleFileChange}
+            onClearFile={handleClearFile}
+          />
           
           {/* Word Count */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="wordCount">Word Count: {formData.wordCount}</Label>
-            </div>
-            <Slider
-              id="wordCount"
-              defaultValue={[1000]}
-              max={3000}
-              min={300}
-              step={100}
-              value={[formData.wordCount]}
-              onValueChange={handleSliderChange}
-              className="py-4"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>300</span>
-              <span>3000</span>
-            </div>
-          </div>
+          <WordCountField 
+            value={formData.wordCount}
+            onChange={handleSliderChange}
+          />
         </CardContent>
         
         <CardFooter>
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Processing..." : "Generate Content"}
+            {isLoading ? (
+              <div className="flex items-center">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <span>Processing...</span>
+              </div>
+            ) : "Generate Content"}
           </Button>
         </CardFooter>
       </form>
