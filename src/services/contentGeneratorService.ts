@@ -23,6 +23,22 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
       throw new Error('No content was generated. Please try again.');
     }
 
+    // Handle specific error codes from the edge function
+    if (data.code === 'OPENAI_QUOTA_ERROR') {
+      toast.error('OpenAI API quota exceeded. Please check your OpenAI billing and credits.');
+      throw new Error(data.error);
+    }
+
+    if (data.code === 'OPENAI_API_ERROR') {
+      toast.error('Error calling OpenAI API. Please try again later.');
+      throw new Error(data.error);
+    }
+
+    if (data.code === 'UNKNOWN_ERROR') {
+      toast.error('An unexpected error occurred. Please try again.');
+      throw new Error(data.error);
+    }
+
     // Check for specific missing OpenAI API key error
     if (data.missingKey) {
       toast.error('The OpenAI API key is not configured in the server environment. Please contact the administrator.');

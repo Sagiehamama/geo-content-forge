@@ -103,8 +103,25 @@ ${formData.toneUrl ? `The content should mimic the writing style found at: ${for
     if (!completion.ok) {
       const error = await completion.json();
       console.error("OpenAI API error:", error);
+      
+      // Handle specific OpenAI errors
+      if (error.error?.code === "insufficient_quota") {
+        return new Response(
+          JSON.stringify({ 
+            error: 'OpenAI API quota exceeded. Please check your OpenAI billing and credits.',
+            code: 'OPENAI_QUOTA_ERROR',
+            details: error.error
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 402 }
+        );
+      }
+      
       return new Response(
-        JSON.stringify({ error: 'Error calling OpenAI API', details: error }),
+        JSON.stringify({ 
+          error: 'Error calling OpenAI API', 
+          code: 'OPENAI_API_ERROR',
+          details: error 
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
@@ -176,7 +193,11 @@ ${formData.toneUrl ? `The content should mimic the writing style found at: ${for
   } catch (error) {
     console.error("Error in generate-content function:", error);
     return new Response(
-      JSON.stringify({ error: 'An unexpected error occurred', details: error.message }),
+      JSON.stringify({ 
+        error: 'An unexpected error occurred', 
+        code: 'UNKNOWN_ERROR',
+        details: error.message 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

@@ -35,7 +35,8 @@ const ResultsPage = () => {
         setContent(generatedContent);
       } catch (error) {
         console.error('Error generating content:', error);
-        setError('Failed to generate content: ' + (error.message || 'Unknown error'));
+        // Use the error message from the service, which now includes user-friendly messages
+        setError(error.message || 'An unexpected error occurred. Please try again.');
       } finally {
         setIsLoading(false);
       }
@@ -128,9 +129,19 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
               <p className="text-muted-foreground mt-2 text-center mb-4">
                 {error}
               </p>
-              <Button onClick={() => navigate('/')}>
-                Return to Form
-              </Button>
+              <div className="space-y-2">
+                <Button onClick={() => navigate('/')}>
+                  Return to Form
+                </Button>
+                {error.includes('OpenAI API quota') && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => window.open('https://platform.openai.com/account/billing', '_blank')}
+                  >
+                    Check OpenAI Billing
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
