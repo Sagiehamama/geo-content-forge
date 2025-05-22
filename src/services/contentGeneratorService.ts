@@ -128,12 +128,24 @@ export const saveContentTemplate = async (template: Partial<ContentTemplate>): P
         .neq('id', template.id || ''); // Use empty string for new templates
     }
     
+    // Make sure all required fields are present
+    if (!template.name || !template.system_prompt || !template.user_prompt) {
+      throw new Error('Template name, system prompt, and user prompt are required');
+    }
+    
+    const templateToSave = {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      system_prompt: template.system_prompt,
+      user_prompt: template.user_prompt,
+      is_default: template.is_default ?? false,
+      updated_at: new Date().toISOString()
+    };
+    
     const { data, error } = await supabase
       .from('content_templates')
-      .upsert({
-        ...template,
-        updated_at: new Date().toISOString()
-      })
+      .upsert(templateToSave)
       .select()
       .single();
       
