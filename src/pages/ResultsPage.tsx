@@ -16,7 +16,7 @@ import { useContent } from '@/context/ContentContext';
 import { supabase } from '@/integrations/supabase/client';
 
 // Replace the placeholder with a more obvious placeholder image that's more visually prominent
-const PLACEHOLDER_IMAGE = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22600%22%20height%3D%22400%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23f0f0f0%22%2F%3E%3Crect%20x%3D%2250%22%20y%3D%2250%22%20width%3D%22500%22%20height%3D%22300%22%20fill%3D%22%23e0e0e0%22%20stroke%3D%22%23d0d0d0%22%20stroke-width%3D%222%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22180%22%20font-family%3D%22Arial%22%20font-size%3D%2224%22%20text-anchor%3D%22middle%22%20fill%3D%22%236b7280%22%3EClick%20to%20select%20an%20image%3C%2Ftext%3E%3Ctext%20x%3D%22300%22%20y%3D%22220%22%20font-family%3D%22Arial%22%20font-size%3D%2218%22%20text-anchor%3D%22middle%22%20fill%3D%22%238d8d8d%22%3EImage%20placeholder%3C%2Ftext%3E%3C%2Fsvg%3E';
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22600%22%20height%3D%22400%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23e0e0e0%22%2F%3E%3Crect%20x%3D%2250%22%20y%3D%2250%22%20width%3D%22500%22%20height%3D%22300%22%20fill%3D%22%23f0f0f0%22%20stroke%3D%22%2385c1e9%22%20stroke-width%3D%224%22%20stroke-dasharray%3D%225%2C5%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22180%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22bold%22%20text-anchor%3D%22middle%22%20fill%3D%22%234a90e2%22%3EClick%20to%20select%20image%3C%2Ftext%3E%3Ctext%20x%3D%22300%22%20y%3D%22220%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2218%22%20text-anchor%3D%22middle%22%20fill%3D%22%236b7280%22%3EChoose%20from%20available%20options%3C%2Ftext%3E%3C%2Fsvg%3E';
 
 const ResultsPage = () => {
   const navigate = useNavigate();
@@ -229,13 +229,19 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
   const getContentWithImagePlaceholders = () => {
     if (!contextContent?.content) return '';
     
-    // First, remove any YAML frontmatter
+    // Completely strip out any YAML frontmatter from the beginning
     let processedContent = contextContent.content;
     if (processedContent.startsWith('---')) {
-      processedContent = processedContent.replace(/^---[\s\S]*?---\s*/m, '');
+      const frontmatterEndIndex = processedContent.indexOf('---', 3);
+      if (frontmatterEndIndex > 0) {
+        processedContent = processedContent.substring(frontmatterEndIndex + 3).trim();
+      }
     }
     
-    // First, look for explicit [IMAGE:location] tags
+    // Replace any "spot X" labels that might be appearing as text
+    processedContent = processedContent.replace(/spot\s+\d+/gi, '');
+    
+    // First, look for explicit [IMAGE:location] tags and replace them
     contextMediaSpots.forEach(spot => {
       const locationTag = `[IMAGE:${spot.location}]`;
       if (processedContent.includes(locationTag)) {
@@ -245,9 +251,9 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       }
     });
     
-    // Then, if no explicit tags were found, try to inject placeholders at logical spots
-    if (contextMediaSpots.length > 0 && !processedContent.includes('[IMAGE:') && !processedContent.includes('![')) {
-      // Try to inject after first paragraph
+    // If no explicit tags were found, inject placeholders at logical spots
+    if (contextMediaSpots.length > 0 && !processedContent.includes('[IMAGE:') && !processedContent.match(/!\[.*?\]\(.*?\)/)) {
+      // Try to inject after first paragraph for the first image
       if (contextMediaSpots.length > 0 && processedContent.includes('\n\n')) {
         const firstSpot = contextMediaSpots[0];
         const imageUrl = contextSelectedImages[firstSpot.location] || PLACEHOLDER_IMAGE;
@@ -281,6 +287,27 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
           }
         }
       }
+      
+      // Add a third image if available and there's a second header
+      if (contextMediaSpots.length > 2 && processedContent.indexOf('\n## ', processedContent.indexOf('\n## ') + 1) !== -1) {
+        const thirdSpot = contextMediaSpots[2];
+        const imageUrl = contextSelectedImages[thirdSpot.location] || PLACEHOLDER_IMAGE;
+        const imgMarkdown = `\n\n![${thirdSpot.location.replace(/_/g, ' ')}](${imageUrl})\n\n`;
+        
+        // Find the second section header
+        const firstHeaderIdx = processedContent.indexOf('\n## ');
+        const secondHeaderIdx = processedContent.indexOf('\n## ', firstHeaderIdx + 1);
+        
+        if (secondHeaderIdx !== -1) {
+          const nextParagraphIdx = processedContent.indexOf('\n\n', secondHeaderIdx + 4);
+          if (nextParagraphIdx !== -1) {
+            processedContent = 
+              processedContent.substring(0, nextParagraphIdx + 2) + 
+              imgMarkdown + 
+              processedContent.substring(nextParagraphIdx + 2);
+          }
+        }
+      }
     }
     
     return processedContent;
@@ -288,14 +315,30 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
 
   // Handler for clicking on an image in the preview
   const handleImageClick = (src: string) => {
-    // Find which spot this image belongs to
-    const spot = contextMediaSpots.find(spot => 
-      contextSelectedImages[spot.location] === src || 
-      (!contextSelectedImages[spot.location] && PLACEHOLDER_IMAGE === src)
-    );
+    // If no media spots, nothing to do
+    if (contextMediaSpots.length === 0) return;
     
+    // Find which spot this image belongs to based on the src
+    const spot = contextMediaSpots.find(spot => {
+      // Case 1: It's a selected image for this spot
+      if (contextSelectedImages[spot.location] === src) {
+        return true;
+      }
+      
+      // Case 2: It's a placeholder and this spot doesn't have a selected image
+      if (src === PLACEHOLDER_IMAGE && !contextSelectedImages[spot.location]) {
+        return true;
+      }
+      
+      return false;
+    });
+    
+    // If we found a matching spot, open the image selection dialog
     if (spot) {
       setSelectedSpot(spot.location);
+    } else {
+      // If no specific match but we have spots, default to the first one
+      setSelectedSpot(contextMediaSpots[0].location);
     }
   };
   
@@ -367,14 +410,33 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                 a: ({ node, ...props }) => (
                                   <a {...props} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" />
                                 ),
-                                img: ({ node, ...props }) => (
-                                  <img 
-                                    {...props} 
-                                    className="rounded-md max-w-full h-auto my-4 cursor-pointer hover:ring-2 hover:ring-primary transition-all" 
-                                    loading="lazy" 
-                                    onClick={() => handleImageClick(props.src || '')}
-                                  />
-                                ),
+                                img: ({ node, ...props }) => {
+                                  // Determine if this is a placeholder image
+                                  const isPlaceholder = props.src === PLACEHOLDER_IMAGE;
+                                  // Find which spot this might belong to
+                                  const spotLocation = contextMediaSpots.find(spot => 
+                                    contextSelectedImages[spot.location] === props.src || 
+                                    (!contextSelectedImages[spot.location] && isPlaceholder)
+                                  )?.location;
+                                  
+                                  return (
+                                    <div className="my-4 relative">
+                                      <img 
+                                        {...props} 
+                                        className={`rounded-md max-w-full h-auto cursor-pointer hover:ring-2 hover:ring-primary transition-all ${isPlaceholder ? 'border-2 border-dashed border-blue-300' : ''}`} 
+                                        loading="lazy" 
+                                        onClick={() => handleImageClick(props.src || '')}
+                                      />
+                                      {isPlaceholder && (
+                                        <div 
+                                          className="absolute top-2 left-2 bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full"
+                                        >
+                                          Click to select image
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                },
                                 h1: ({ node, ...props }) => (
                                   <h1 {...props} className="text-2xl font-bold mt-6 mb-4" />
                                 ),
