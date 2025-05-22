@@ -31,6 +31,13 @@ serve(async (req) => {
       );
     }
 
+    if (!openAIApiKey) {
+      return new Response(
+        JSON.stringify({ error: 'OpenAI API key is not configured in environment variables' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
     // Fetch template from database (either specified template or default)
     let templateQuery = supabase.from('content_templates').select('*');
     

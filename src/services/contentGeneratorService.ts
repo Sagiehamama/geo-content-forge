@@ -1,4 +1,3 @@
-
 import { FormData, GeneratedContent } from "@/components/content/form/types";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -241,7 +240,7 @@ export const generateContent = async (formData: FormData, templateId?: string): 
 };
 
 // Get content history from database
-export const getContentHistory = async (): Promise<GeneratedContent & { generatedAt: string }[]> => {
+export const getContentHistory = async (): Promise<(GeneratedContent & { generatedAt: string })[]> => {
   try {
     const { data, error } = await supabase
       .from('generated_content')
@@ -278,10 +277,10 @@ export const getContentHistory = async (): Promise<GeneratedContent & { generate
       generatedAt: item.generated_at,
       prompt: item.content_requests?.prompt || '',
       language: item.content_requests?.language || 'en'
-    }));
+    })) as (GeneratedContent & { generatedAt: string })[];
   } catch (error) {
     console.error('Error retrieving content history:', error);
-    return [];
+    return [] as (GeneratedContent & { generatedAt: string })[];
   }
 };
 

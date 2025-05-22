@@ -1,45 +1,41 @@
-
 import { z } from "zod";
 
 export interface FormData {
   prompt: string;
-  country: string;
-  language: string;
-  tone: string;
-  toneUrl: string;
-  toneType: 'description' | 'url';
-  useAiMedia: boolean;
-  mediaFile: File | null;
-  wordCount: number;
-  includeImages: boolean;
-  includeFrontmatter: boolean;
-  audience: string;  // Added this field
+  tone?: string;
+  toneType?: string;
+  toneUrl?: string;
+  wordCount?: number;
+  language?: string;
+  country?: string;
+  includeImages?: boolean;
+  includeFrontmatter?: boolean;
+  useAiMedia?: boolean;
+  audience?: string; // Add audience field to the type
 }
 
 export const initialFormData: FormData = {
   prompt: '',
-  country: '',
-  language: 'en',
   tone: '',
-  toneUrl: '',
   toneType: 'description',
-  useAiMedia: true,
-  mediaFile: null,
+  toneUrl: '',
   wordCount: 1000,
+  language: 'en',
+  country: '',
   includeImages: true,
   includeFrontmatter: true,
+  useAiMedia: true,
   audience: '',  // Initialize with empty string
 };
 
 export const formSchema = z.object({
   prompt: z.string().min(1, { message: "Please enter an AI prompt to rank for" }),
-  country: z.string(),
-  language: z.string(),
   tone: z.string().optional(),
-  toneUrl: z.string().optional(),
   toneType: z.enum(['description', 'url']),
-  useAiMedia: z.boolean(),
+  toneUrl: z.string().optional(),
   wordCount: z.number().min(300).max(3000),
+  language: z.string(),
+  country: z.string(),
   includeImages: z.boolean(),
   includeFrontmatter: z.boolean(),
   audience: z.string().optional(),
@@ -176,4 +172,3 @@ Remember, SEO is not about tricking search engines but about providing value to 
   readingTime: 5,
   wordCount: 650
 };
-
