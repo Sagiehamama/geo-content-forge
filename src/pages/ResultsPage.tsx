@@ -506,12 +506,14 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                         position: 'relative',
                                         borderWidth: '2px',
                                         borderStyle: 'dashed',
-                                        borderColor: '#93c5fd', // A light blue, for example
-                                        minHeight: '200px', // Ensure placeholder has some size
+                                        borderColor: '#93c5fd',
+                                        minHeight: '100px',
+                                        maxHeight: '150px',
+                                        width: '50%',
+                                        margin: '0 auto',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        // Potentially add a ::before pseudo-element with text via CSS if needed, or an overlay
                                       } : undefined}
                                       title={isPlaceholder ? "Click to select an image" : props.alt}
                                     />

@@ -84,12 +84,19 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
 
   const updateFinalImage = (spotLocation: string, imageOption: MediaImageOption | null) => {
     setFinalImages(prevImages => {
-      // If imageOption is null or its URL is empty, remove the image for the spot
-      if (!imageOption || !imageOption.url) {
-        return prevImages.filter(img => img.location !== spotLocation);
+      // If imageOption is null, remove the image for this spot
+      if (!imageOption) {
+        const newImages = prevImages.filter(img => img.location !== spotLocation);
+        // Update generatedContent to reflect the change
+        if (generatedContent) {
+          setGeneratedContent({
+            ...generatedContent,
+            images: newImages
+          });
+        }
+        return newImages;
       }
 
-      const existingImageIndex = prevImages.findIndex(img => img.location === spotLocation);
       const newImage: ContentImage = {
         location: spotLocation,
         url: imageOption.url,
@@ -97,13 +104,25 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
         caption: imageOption.caption,
         source: imageOption.source,
       };
+
+      const existingImageIndex = prevImages.findIndex(img => img.location === spotLocation);
+      let newImages;
       if (existingImageIndex >= 0) {
-        const updatedImages = [...prevImages];
-        updatedImages[existingImageIndex] = newImage;
-        return updatedImages;
+        newImages = [...prevImages];
+        newImages[existingImageIndex] = newImage;
       } else {
-        return [...prevImages, newImage];
+        newImages = [...prevImages, newImage];
       }
+
+      // Update generatedContent to reflect the change
+      if (generatedContent) {
+        setGeneratedContent({
+          ...generatedContent,
+          images: newImages
+        });
+      }
+
+      return newImages;
     });
   };
 
