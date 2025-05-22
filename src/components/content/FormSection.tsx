@@ -22,7 +22,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from 'sonner';
-import { Search, FileInput, Upload } from "lucide-react";
+import { Search, FileInput, Upload, Loader2 } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface FormData {
@@ -88,44 +88,84 @@ const countries = [
 const FormSection = () => {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(true);
   const navigate = useNavigate();
 
-  // Detect user country on component mount
+  // Detect user country on component mount - improved implementation
   useEffect(() => {
     const detectLocation = async () => {
+      setIsDetectingLocation(true);
+      
       try {
-        // First try using the Geolocation API
+        // Try using IP-based geolocation first - no permission required
+        const ipResponse = await fetch('https://ipapi.co/json/');
+        
+        if (ipResponse.ok) {
+          const ipData = await ipResponse.json();
+          const countryCode = ipData.country_code;
+          
+          // Check if the country is in our list
+          if (countryCode && countries.some(country => country.code === countryCode)) {
+            setFormData(prev => ({ ...prev, country: countryCode }));
+            console.log(`Country detected via IP: ${countryCode}`);
+            setIsDetectingLocation(false);
+            return;
+          }
+        }
+        
+        // Fallback to browser geolocation API if IP-based detection fails
         if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(async (position) => {
-            try {
-              const { latitude, longitude } = position.coords;
-              
-              const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-              );
-              
-              if (response.ok) {
-                const data = await response.json();
-                const countryCode = data.address?.country_code?.toUpperCase() || '';
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              try {
+                const { latitude, longitude } = position.coords;
                 
-                // Find the country in our list
-                if (countryCode && countries.some(country => country.code === countryCode)) {
-                  setFormData(prev => ({ ...prev, country: countryCode }));
-                  console.log(`Country detected: ${countryCode}`);
+                const response = await fetch(
+                  `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+                );
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  const countryCode = data.address?.country_code?.toUpperCase() || '';
+                  
+                  // Find the country in our list
+                  if (countryCode && countries.some(country => country.code === countryCode)) {
+                    setFormData(prev => ({ ...prev, country: countryCode }));
+                    console.log(`Country detected via browser geolocation: ${countryCode}`);
+                  } else {
+                    // Default to US if country not in list
+                    setFormData(prev => ({ ...prev, country: 'US' }));
+                    console.log('Country not found in list, defaulting to US');
+                  }
+                } else {
+                  // Default if geocoding fails
+                  setFormData(prev => ({ ...prev, country: 'US' }));
+                  console.log('Geocoding failed, defaulting to US');
                 }
+              } catch (error) {
+                console.error('Error with reverse geocoding:', error);
+                setFormData(prev => ({ ...prev, country: 'US' }));
+                console.log('Error occurred, defaulting to US');
               }
-            } catch (error) {
-              console.error('Error with reverse geocoding:', error);
-              // Silently fail, user will need to select country manually
-            }
-          }, (error) => {
-            console.error('Geolocation permission denied or error:', error);
-            // Silently fail, user will need to select country manually
-          });
+            },
+            (error) => {
+              console.error('Geolocation permission denied or error:', error);
+              setFormData(prev => ({ ...prev, country: 'US' }));
+              console.log('Geolocation error, defaulting to US');
+            },
+            { timeout: 5000, maximumAge: 0 }
+          );
+        } else {
+          // Geolocation not supported
+          setFormData(prev => ({ ...prev, country: 'US' }));
+          console.log('Geolocation not supported, defaulting to US');
         }
       } catch (error) {
         console.error('Error detecting location:', error);
-        // Silently fail, user will need to select country manually
+        setFormData(prev => ({ ...prev, country: 'US' }));
+        console.log('Location detection error, defaulting to US');
+      } finally {
+        setIsDetectingLocation(false);
       }
     };
 
@@ -234,22 +274,32 @@ const FormSection = () => {
           {/* Country Dropdown */}
           <div className="space-y-2">
             <Label htmlFor="country">Country</Label>
-            <Select
-              name="country"
-              value={formData.country}
-              onValueChange={(value) => handleSelectChange('country', value)}
-            >
-              <SelectTrigger id="country">
-                <SelectValue placeholder="Select your target country" />
-              </SelectTrigger>
-              <SelectContent>
-                {countries.map((country) => (
-                  <SelectItem key={country.code} value={country.code}>
-                    {country.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="relative">
+              <Select
+                name="country"
+                value={formData.country}
+                onValueChange={(value) => handleSelectChange('country', value)}
+                disabled={isDetectingLocation}
+              >
+                <SelectTrigger id="country" className={isDetectingLocation ? "bg-muted" : ""}>
+                  {isDetectingLocation ? (
+                    <div className="flex items-center">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <span>Detecting your location...</span>
+                    </div>
+                  ) : (
+                    <SelectValue placeholder="Select your target country" />
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {countries.map((country) => (
+                    <SelectItem key={country.code} value={country.code}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <p className="text-sm text-muted-foreground">
               Helps optimize content for your geographic area.
             </p>
