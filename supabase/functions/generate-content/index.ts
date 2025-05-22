@@ -146,23 +146,14 @@ ${formData.toneUrl ? `The content should mimic the writing style found at: ${for
     const wordCount = generatedContent.split(/\s+/).length;
     const readingTime = Math.ceil(wordCount / 200);
 
-    // Simulate various content quality scores
-    // These would ideally be calculated by more sophisticated algorithms
-    const seoScore = Math.floor(Math.random() * 11) + 90; // 90-100
-    const readabilityScore = `Grade ${Math.floor(Math.random() * 4) + 6}`; // Grade 6-9
-    const factCheckScore = Math.floor(Math.random() * 6) + 95; // 95-100
-
-    // Create the response object
+    // Create the response object with actual content data, but NO mock metrics
     const responseObject = {
       title: frontmatter.title,
       content: generatedContent,
       frontmatter: frontmatter,
-      images: [], // Placeholder for future image generation
+      images: [], // Note: Currently no image generation functionality
       wordCount: wordCount,
-      readingTime: readingTime,
-      seoScore: seoScore,
-      readabilityScore: readabilityScore,
-      factCheckScore: factCheckScore,
+      readingTime: readingTime, // This is a simple calculation, not randomized
       templateId: templateData.id,
       templateName: templateData.name
     };
