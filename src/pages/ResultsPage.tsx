@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useContent } from '@/context/ContentContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
+import { Input } from "@/components/ui/input";
+import { ImageOption } from '@/components/content/ImageOption';
 
 // Use a path to an image in the public folder
 const PLACEHOLDER_IMAGE = '/placeholder-select.png'; // Adjust filename if needed
@@ -45,6 +47,9 @@ const ResultsPage = () => {
   const [mediaRetryCount, setMediaRetryCount] = useState(0);
   const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [useCustomDescription, setUseCustomDescription] = useState(false);
+  const [customDescription, setCustomDescription] = useState('');
+  const [lastCustomDescription, setLastCustomDescription] = useState('');
   
   // If we don't have form data, redirect to home
   useEffect(() => {
@@ -52,6 +57,15 @@ const ResultsPage = () => {
       navigate('/');
     }
   }, [contextFormData, navigate]);
+  
+  // Load last custom description from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('lastCustomDescription');
+    if (saved) {
+      setLastCustomDescription(saved);
+      setCustomDescription(saved);
+    }
+  }, []);
   
   // Generate content if needed
   useEffect(() => {
@@ -246,9 +260,61 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
   };
   
   // Handler for refreshing images
-  const handleRefreshImages = () => {
+  const handleRefreshImages = async (customDescription?: string) => {
+    setMediaSpots([]); // Clear existing spots first
     setMediaRetryCount(prev => prev + 1);
-    toast.info('Refreshing image suggestions...');
+    setMediaLoading(true);
+    setMediaError(null);
+    
+    try {
+      // If we have a custom description, pass it to the media agent
+      if (customDescription && contextContent) {
+        const spots = await getMediaSuggestions({
+          markdown: contextContent.content,
+          title: contextContent.title,
+          customDescription
+        });
+        console.log('Custom search results:', spots);
+        setMediaSpots(spots);
+      } else if (contextContent) {
+        const spots = await getMediaSuggestions({
+          markdown: contextContent.content,
+          title: contextContent.title
+        });
+        setMediaSpots(spots);
+      }
+      
+      toast.success('Image suggestions refreshed');
+    } catch (err: any) {
+      console.error('Error refreshing images:', err);
+      setMediaError(err.message || 'Failed to refresh images');
+      toast.error('Failed to refresh images');
+    } finally {
+      setMediaLoading(false);
+    }
+  };
+  
+  // Handler for button click
+  const handleRefreshClick = async () => {
+    await handleRefreshImages();
+  };
+  
+  // Handler for custom description search
+  const handleCustomSearch = async () => {
+    console.log('Handling custom search with description:', customDescription);
+    if (customDescription.trim()) {
+      // Save to localStorage
+      localStorage.setItem('lastCustomDescription', customDescription);
+      setLastCustomDescription(customDescription);
+      
+      // Trigger search
+      console.log('Calling getMediaSuggestions with custom description');
+      await handleRefreshImages(customDescription);
+      
+      // Reset UI
+      setUseCustomDescription(false);
+      console.log('Reset useCustomDescription to false');
+    }
   };
   
   // Function to replace image placeholders in Markdown content
@@ -297,32 +363,26 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       // If no images found at all, inject placeholders at logical spots
       if (!processedContent.includes('![')) {
         const paragraphs = processedContent.split('\n\n');
+        const totalParagraphs = paragraphs.length;
         
-        // Try to inject after the first paragraph if we have spots
-        if (contextMediaSpots.length > 0 && paragraphs.length > 1) {
-          const firstSpot = contextMediaSpots[0];
-          const imageUrl = getImageForSpot(firstSpot.location);
-          const altText = firstSpot.options.find(opt => opt.url === imageUrl)?.alt || firstSpot.location.replace(/_/g, ' ');
-          const imgMarkdown = `![${altText}](${imageUrl})`;
-          
-          // Insert after first paragraph
-          paragraphs.splice(1, 0, imgMarkdown);
-        }
+        // Calculate optimal image positions based on content length
+        const imagePositions = contextMediaSpots.map((_, idx) => {
+          // Distribute images evenly throughout the content
+          return Math.floor((totalParagraphs / (contextMediaSpots.length + 1)) * (idx + 1));
+        });
         
-        // Try to find a section header for the second image
-        if (contextMediaSpots.length > 1 && paragraphs.length > 2) { // Ensure enough paragraphs
-          // Find a section heading (## heading)
-          const headingIndex = paragraphs.findIndex(p => p.startsWith('## '));
-          if (headingIndex >= 0 && headingIndex + 1 < paragraphs.length) {
-            const secondSpot = contextMediaSpots[1];
-            const imageUrl = getImageForSpot(secondSpot.location);
-            const altText = secondSpot.options.find(opt => opt.url === imageUrl)?.alt || secondSpot.location.replace(/_/g, ' ');
+        // Insert images at calculated positions
+        imagePositions.forEach((position, idx) => {
+          if (position < paragraphs.length) {
+            const spot = contextMediaSpots[idx];
+            const imageUrl = getImageForSpot(spot.location);
+            const altText = spot.options.find(opt => opt.url === imageUrl)?.alt || spot.location.replace(/_/g, ' ');
             const imgMarkdown = `![${altText}](${imageUrl})`;
             
-            // Insert after the heading's content
-            paragraphs.splice(headingIndex + 1, 0, imgMarkdown);
+            // Insert after the paragraph at the calculated position
+            paragraphs.splice(position, 0, imgMarkdown);
           }
-        }
+        });
         
         // Join everything back together
         processedContent = paragraphs.join('\n\n');
@@ -392,6 +452,14 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
         </p>
       </div>
       
+      {mediaLoading && (
+        <div className="flex flex-col items-center py-4 mb-8 bg-white rounded-lg border shadow-sm">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-lg font-medium">Finding the best images for your article...</p>
+          <p className="text-muted-foreground mt-2 text-center">This may take a few seconds. We search for relevant, high-quality images for each section.</p>
+        </div>
+      )}
+
       {isLoading ? (
         <Card className="mb-8">
           <CardContent className="pt-6">
@@ -678,19 +746,12 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
             </div>
           )}
           
-          {mediaLoading && (
-            <div className="flex flex-col items-center py-8">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-lg font-medium">Finding the best images for your article...</p>
-              <p className="text-muted-foreground mt-2 text-center">This may take a few seconds. We search for relevant, high-quality images for each section.</p>
-            </div>
-          )}
           {mediaError && (
             <div className="text-red-600 text-center my-4">
               {mediaError.includes('rate limit') || mediaError.includes('429') ? (
                 <>
                   <div>OpenAI API rate limit reached. Please wait a few seconds and try again.</div>
-                  <Button onClick={handleRefreshImages} className="mt-2">Try Again</Button>
+                  <Button onClick={handleRefreshClick} className="mt-2">Try Again</Button>
                 </>
               ) : (
                 <>{mediaError}</>
@@ -701,7 +762,12 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       )}
       
       {/* Image Selection Dialog */}
-      <Dialog open={!!selectedSpot} onOpenChange={(open) => !open && setSelectedSpot(null)}>
+      <Dialog open={!!selectedSpot} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedSpot(null);
+          setUseCustomDescription(false);
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl">Select an Image</DialogTitle>
@@ -709,93 +775,88 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
               Choose an image for {selectedSpot && selectedSpot.replace(/_/g, ' ')}
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-4">
-            {/* Remove Image Option */}
-            <Card 
-              className={`overflow-hidden cursor-pointer transition-all ${
-                selectedSpot && !contextFinalImages.find(fi => fi.location === selectedSpot) ? 'ring-2 ring-primary' : 'hover:shadow-md'
-              }`} 
-              onClick={() => handleSelectImage(null)}
-            >
-              <div className="p-2 flex flex-col">
-                <div className="relative aspect-video rounded overflow-hidden bg-gray-50 border-2 border-dashed border-gray-300">
-                  <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                    <p className="text-center px-4">
-                      <span className="block text-lg font-medium mb-2">No Image</span>
-                      <span className="block text-sm">Remove image from this spot</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <p className="text-sm font-medium">Remove Image</p>
-                  <p className="text-xs text-gray-500">Content will flow without an image</p>
-                </div>
-              </div>
-            </Card>
 
-            {/* Image Options */}
-            {selectedSpot && (contextMediaSpots.find(s => s.location === selectedSpot)?.options || []).map((option, idx) => (
-              <Card 
-                key={idx} 
-                className={`overflow-hidden cursor-pointer transition-all ${
-                  contextFinalImages.find(fi => fi.location === selectedSpot)?.url === option.url ? 'ring-2 ring-primary' : 'hover:shadow-md'
-                }`} 
-                onClick={() => handleSelectImage(option)}
+          {!useCustomDescription && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-4">
+              {selectedSpot && contextMediaSpots.map(spot => {
+                if (spot.location !== selectedSpot) return null;
+                return spot.options.map((option, idx) => (
+                  <ImageOption
+                    key={`${spot.location}-${idx}`}
+                    option={option}
+                    onSelect={() => handleSelectImage(option)}
+                  />
+                ));
+              })}
+              <ImageOption
+                option={null}
+                onSelect={() => handleSelectImage(null)}
+              />
+            </div>
+          )}
+
+          {useCustomDescription && (
+            <div className="space-y-4 my-4">
+              <Input
+                placeholder="Describe the image you want (e.g., 'professional swimwear photoshoot on beach')"
+                value={customDescription}
+                onChange={(e) => setCustomDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customDescription.trim()) {
+                    handleCustomSearch();
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          <DialogFooter className="flex items-center justify-between pt-4 border-t">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setUseCustomDescription(true)}
               >
-                <div className="p-2 flex flex-col">
-                  <div className="relative aspect-video rounded overflow-hidden bg-gray-100">
-                    {option.url === PLACEHOLDER_IMAGE ? (
-                      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                        <p className="text-center px-4">
-                          <span className="block text-lg font-medium mb-2">No image available</span>
-                          <span className="block text-sm">Click Refresh Images to try again</span>
-                        </p>
-                      </div>
-                    ) : (
-                      <img 
-                        src={option.url} 
-                        alt={option.alt || `Option ${idx + 1}`} 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          console.error(`Failed to load image: ${option.url}`);
-                          e.currentTarget.src = PLACEHOLDER_IMAGE;
-                        }}
-                      />
-                    )}
-                    {contextFinalImages.find(fi => fi.location === selectedSpot)?.url === option.url && (
-                      <div className="absolute top-2 right-2 bg-primary text-white p-1 rounded-full">
-                        <Check className="h-4 w-4" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-2">
-                    <p className="text-sm font-medium truncate">{option.caption || `Option ${idx + 1}`}</p>
-                    <p className="text-xs text-gray-500">{option.source || 'Source: Unknown'}</p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-          
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setSelectedSpot(null)}>Cancel</Button>
-            <Button 
-              onClick={() => handleRefreshImages()} 
-              disabled={mediaLoading}
-              className="min-w-[120px]"
-            >
-              {mediaLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh Images
-                </>
+                Custom Description
+              </Button>
+              {!useCustomDescription && (
+                <Button
+                  size="sm"
+                  onClick={handleRefreshClick}
+                  disabled={mediaLoading}
+                >
+                  {mediaLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh Images
+                    </>
+                  )}
+                </Button>
               )}
+              {useCustomDescription && (
+                <Button
+                  size="sm"
+                  onClick={handleCustomSearch}
+                  disabled={mediaLoading || !customDescription.trim()}
+                >
+                  {mediaLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    'Search'
+                  )}
+                </Button>
+              )}
+            </div>
+            <Button onClick={() => setSelectedSpot(null)} variant={useCustomDescription ? "outline" : "default"}>
+              {useCustomDescription ? 'Cancel' : 'Select'}
             </Button>
           </DialogFooter>
         </DialogContent>
