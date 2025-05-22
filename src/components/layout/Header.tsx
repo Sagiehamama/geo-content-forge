@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Button } from "@/components/ui/button";
 
 const Header = () => {
   return (
@@ -37,13 +36,6 @@ const Header = () => {
             History
           </NavLink>
         </nav>
-
-        <div>
-          <Button variant="outline" className="hidden md:inline-flex mr-2">
-            Sign In
-          </Button>
-          <Button>Get Started</Button>
-        </div>
       </div>
     </header>
   );

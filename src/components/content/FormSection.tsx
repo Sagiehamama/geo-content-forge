@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -23,8 +22,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { toast } from 'sonner';
-import { Search, FileInput, Calendar, Upload } from "lucide-react";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Search, FileInput, Upload } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface FormData {
@@ -96,26 +94,38 @@ const FormSection = () => {
   useEffect(() => {
     const detectLocation = async () => {
       try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        });
-        
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          const countryCode = data.address?.country_code?.toUpperCase() || '';
-          
-          // Find the country in our list or default to empty
-          if (countryCode && countries.some(country => country.code === countryCode)) {
-            setFormData(prev => ({ ...prev, country: countryCode }));
-          }
+        // First try using the Geolocation API
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(async (position) => {
+            try {
+              const { latitude, longitude } = position.coords;
+              
+              const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+              );
+              
+              if (response.ok) {
+                const data = await response.json();
+                const countryCode = data.address?.country_code?.toUpperCase() || '';
+                
+                // Find the country in our list
+                if (countryCode && countries.some(country => country.code === countryCode)) {
+                  setFormData(prev => ({ ...prev, country: countryCode }));
+                  console.log(`Country detected: ${countryCode}`);
+                }
+              }
+            } catch (error) {
+              console.error('Error with reverse geocoding:', error);
+              // Silently fail, user will need to select country manually
+            }
+          }, (error) => {
+            console.error('Geolocation permission denied or error:', error);
+            // Silently fail, user will need to select country manually
+          });
         }
       } catch (error) {
         console.error('Error detecting location:', error);
-        // Silent fail, user can manually select country
+        // Silently fail, user will need to select country manually
       }
     };
 

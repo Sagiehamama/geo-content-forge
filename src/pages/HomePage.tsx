@@ -1,7 +1,6 @@
 
 import React from 'react';
 import FormSection from '@/components/content/FormSection';
-import { Search, Calendar, FileInput } from 'lucide-react';
 
 const HomePage = () => {
   return (
@@ -17,38 +16,6 @@ const HomePage = () => {
       
       <div className="mb-12">
         <FormSection />
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-        <div className="bg-card border rounded-lg p-6 shadow-sm card-hover">
-          <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-            <Search className="h-6 w-6 text-primary" />
-          </div>
-          <h3 className="font-semibold text-lg mb-2">SEO Optimized</h3>
-          <p className="text-muted-foreground">
-            Content strategically crafted to rank higher for your target keywords.
-          </p>
-        </div>
-        
-        <div className="bg-card border rounded-lg p-6 shadow-sm card-hover">
-          <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-            <Calendar className="h-6 w-6 text-primary" />
-          </div>
-          <h3 className="font-semibold text-lg mb-2">GEO Targeted</h3>
-          <p className="text-muted-foreground">
-            Location-specific content that resonates with your local audience.
-          </p>
-        </div>
-        
-        <div className="bg-card border rounded-lg p-6 shadow-sm card-hover">
-          <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-            <FileInput className="h-6 w-6 text-primary" />
-          </div>
-          <h3 className="font-semibold text-lg mb-2">Fact Checked</h3>
-          <p className="text-muted-foreground">
-            Every article is verified for accuracy before delivery.
-          </p>
-        </div>
       </div>
     </div>
   );
