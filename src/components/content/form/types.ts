@@ -1,4 +1,3 @@
-
 import { z } from "zod";
 
 export interface FormData {
@@ -11,8 +10,7 @@ export interface FormData {
   useAiMedia: boolean;
   mediaFile: File | null;
   wordCount: number;
-  // New fields for content generator
-  contentType: 'blog' | 'article' | 'product';
+  // Fields for content generator
   audience: string;
   includeImages: boolean;
   includeFrontmatter: boolean;
@@ -28,8 +26,7 @@ export const initialFormData: FormData = {
   useAiMedia: true,
   mediaFile: null,
   wordCount: 1000,
-  // Initialize new fields
-  contentType: 'blog',
+  // Initialize fields
   audience: 'general',
   includeImages: true,
   includeFrontmatter: true,
@@ -44,8 +41,7 @@ export const formSchema = z.object({
   toneType: z.enum(['description', 'url']),
   useAiMedia: z.boolean(),
   wordCount: z.number().min(300).max(3000),
-  // New field validations
-  contentType: z.enum(['blog', 'article', 'product']),
+  // Field validations
   audience: z.string(),
   includeImages: z.boolean(),
   includeFrontmatter: z.boolean(),

@@ -17,8 +17,16 @@ const HomePage = () => {
         </p>
       </div>
       
+      {/* Form section now comes first */}
       <div className="mb-12">
-        <Card className="mb-8">
+        <FormSection />
+      </div>
+      
+      {/* Combined agent diagram and description section */}
+      <div className="mb-12">
+        <MultiAgentDiagram />
+        
+        <Card className="mt-8">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Bot className="h-6 w-6 text-primary" />
@@ -69,11 +77,6 @@ const HomePage = () => {
             </div>
           </CardContent>
         </Card>
-        <FormSection />
-      </div>
-
-      <div className="mb-12">
-        <MultiAgentDiagram />
       </div>
     </div>
   );

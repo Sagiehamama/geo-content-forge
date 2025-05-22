@@ -22,7 +22,6 @@ import { ToneField } from './form/ToneField';
 import { MediaField } from './form/MediaField';
 import { WordCountField } from './form/WordCountField';
 import { AudienceField } from './form/AudienceField';
-import { ContentTypeField } from './form/ContentTypeField';
 import { ContentOptionsField } from './form/ContentOptionsField';
 import { useLocationDetection } from './form/useLocationDetection';
 
@@ -70,10 +69,6 @@ const FormSection = () => {
     setFormData({...formData, mediaFile: null});
   };
 
-  const handleContentTypeChange = (value: 'blog' | 'article' | 'product') => {
-    setFormData({ ...formData, contentType: value });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -115,12 +110,6 @@ const FormSection = () => {
       
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-6">
-          {/* Content Type */}
-          <ContentTypeField 
-            value={formData.contentType}
-            onChange={handleContentTypeChange}
-          />
-          
           {/* AI Prompt */}
           <PromptField 
             value={formData.prompt} 
