@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 export interface FormData {
@@ -57,6 +58,11 @@ export interface GeneratedContent {
   seoScore: number;
   readabilityScore: string;
   factCheckScore: number;
+}
+
+// For the content history
+export interface ContentHistoryItem extends GeneratedContent {
+  generatedAt: string;
 }
 
 export interface ContentFrontmatter {
