@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const unsplashAccessKey = Deno.env.get('UNSPLASH_ACCESS_KEY');
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -13,23 +14,65 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mock image search API (replace with real API integration)
+// Real Unsplash image search API
 async function searchImages(query: string) {
-  // Return 2-3 mock images for demo
-  return [
-    {
-      url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
-      alt: `${query} - Example Image 1`,
-      caption: `A relevant image for ${query}`,
-      source: 'Unsplash'
-    },
-    {
-      url: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca',
-      alt: `${query} - Example Image 2`,
-      caption: `Another relevant image for ${query}`,
-      source: 'Unsplash'
+  if (!unsplashAccessKey) {
+    console.warn('UNSPLASH_ACCESS_KEY not configured, using fallback images');
+    return [
+      {
+        url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
+        alt: `${query} - Example Image 1`,
+        caption: `A relevant image for ${query}`,
+        source: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=600&q=80',
+        alt: `${query} - Example Image 2`,
+        caption: `Another relevant image for ${query}`,
+        source: 'Unsplash'
+      }
+    ];
+  }
+  
+  try {
+    const response = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=3`,
+      {
+        headers: {
+          'Authorization': `Client-ID ${unsplashAccessKey}`
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Unsplash API error: ${response.status}`);
     }
-  ];
+    
+    const data = await response.json();
+    return data.results.map(photo => ({
+      url: `${photo.urls.regular}&auto=format&fit=crop&w=600&q=80`,
+      alt: photo.alt_description || query,
+      caption: photo.description || `Image for ${query}`,
+      source: `Unsplash (Photo by ${photo.user.name})`
+    }));
+  } catch (error) {
+    console.error('Error searching images:', error);
+    // Fallback images in case of API failure
+    return [
+      {
+        url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
+        alt: `${query} - Example Image 1`,
+        caption: `A relevant image for ${query}`,
+        source: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=600&q=80',
+        alt: `${query} - Example Image 2`,
+        caption: `Another relevant image for ${query}`,
+        source: 'Unsplash'
+      }
+    ];
+  }
 }
 
 serve(async (req) => {

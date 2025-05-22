@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useContent } from '@/context/ContentContext';
 import { supabase } from '@/integrations/supabase/client';
 
-const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80';
+// Replace the placeholder with a more obvious placeholder image
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%22600%22%20height%3D%22400%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23f3f4f6%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22200%22%20font-family%3D%22Arial%22%20font-size%3D%2220%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%20fill%3D%22%236b7280%22%3EClick%20to%20select%20an%20image%3C%2Ftext%3E%3C%2Fsvg%3E';
 
 const ResultsPage = () => {
   const navigate = useNavigate();
@@ -228,7 +229,11 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
   const getContentWithImagePlaceholders = () => {
     if (!contextContent?.content) return '';
     
+    // First, remove any YAML frontmatter
     let processedContent = contextContent.content;
+    if (processedContent.startsWith('---')) {
+      processedContent = processedContent.replace(/^---([\s\S]*?)---\n*/m, '');
+    }
     
     // First, look for explicit [IMAGE:location] tags
     contextMediaSpots.forEach(spot => {
@@ -591,12 +596,6 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
             </div>
           </DialogContent>
         </Dialog>
-      )}
-      
-      {contextMediaSpots.length > 0 && contextContent && (
-        <div className="mt-4 p-4 bg-muted rounded-md text-sm">
-          <p className="font-medium">Image Selection: <span className="font-normal text-muted-foreground">Click on any image in the preview to choose from available options or use the placeholder.</span></p>
-        </div>
       )}
     </div>
   );
