@@ -127,14 +127,21 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
     
     // Process the results to match our GeneratedContent type
     return data.map(item => {
-      // Parse the frontmatter and images from JSON
+      // Parse the frontmatter from JSON
       const frontmatterObj = typeof item.frontmatter === 'string' 
         ? JSON.parse(item.frontmatter) 
         : (item.frontmatter || {});
-        
-      const imagesArr = item.images 
-        ? (typeof item.images === 'string' ? JSON.parse(item.images) : item.images) 
-        : [];
+
+      // Default empty array for images since it might not exist in the database
+      let imagesArr: any[] = [];
+      
+      // Check if the item has an images property before trying to parse it
+      if ('images' in item) {
+        const itemImages = (item as any).images;
+        if (itemImages) {
+          imagesArr = typeof itemImages === 'string' ? JSON.parse(itemImages) : itemImages;
+        }
+      }
         
       return {
         id: item.id,
