@@ -1,4 +1,5 @@
-import { FormData, GeneratedContent, mockGeneratedContent } from "@/components/content/form/types";
+
+import { FormData, GeneratedContent } from "@/components/content/form/types";
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 
@@ -86,21 +87,21 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
       
     if (requestError) throw requestError;
 
-    // In a real implementation, we would make an API call to OpenAI
-    // For now, we'll simulate the delay and return enhanced mock data
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Call the Supabase Edge Function to generate content
+    const { data, error: functionError } = await supabase.functions.invoke('generate-content', {
+      body: { formData }
+    });
     
-    // Create a custom content object based on the form data
-    const generatedContent: GeneratedContent = {
-      ...mockGeneratedContent,
-      wordCount: formData.wordCount,
-      title: formData.prompt.charAt(0).toUpperCase() + formData.prompt.slice(1),
-      frontmatter: {
-        ...mockGeneratedContent.frontmatter,
-        title: formData.prompt.charAt(0).toUpperCase() + formData.prompt.slice(1),
-        tags: ["Blog Article", ...mockGeneratedContent.frontmatter.tags],
-      }
-    };
+    if (functionError) {
+      console.error('Error calling generate-content function:', functionError);
+      throw functionError;
+    }
+    
+    if (!data) {
+      throw new Error('No data returned from content generation function');
+    }
+    
+    const generatedContent: GeneratedContent = data;
     
     // Store the generated content in the database
     const { error: contentError } = await supabase
