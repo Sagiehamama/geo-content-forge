@@ -1,7 +1,5 @@
-
 import React from 'react';
 import FormSection from '@/components/content/FormSection';
-import MultiAgentDiagram from '@/components/content/MultiAgentDiagram';
 
 const HomePage = () => {
   return (
@@ -15,14 +13,8 @@ const HomePage = () => {
         </p>
       </div>
       
-      {/* Form section now comes first */}
       <div className="mb-12">
         <FormSection />
-      </div>
-      
-      {/* Agent diagram section */}
-      <div className="mb-12">
-        <MultiAgentDiagram />
       </div>
     </div>
   );

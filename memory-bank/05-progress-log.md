@@ -9,3 +9,18 @@
   - Fixed image placeholders with improved interactive selection UI
   - Added "Save to History" functionality and enhanced History page
   - Improved error handling and UX across the application
+- **Added custom image description feature (2024-05-24)**
+  - Users can now toggle between AI-suggested images and custom descriptions
+  - Added UI for entering custom image descriptions
+  - Updated media-agent function to handle custom queries
+  - Improved image search relevance with user-provided descriptions
+- **Enhanced database schema and content processing (2024-05-25)**
+  - Added quality metrics fields (fact check, readability, SEO scores)
+  - Improved YAML frontmatter handling and content cleanup
+  - Enhanced image placement logic and content flow
+  - Added proper JSON handling for structured data
+- **Improved state management and persistence (2024-05-25)**
+  - Enhanced ContentContext with local storage backup
+  - Better handling of content retries and media refreshes
+  - Improved error handling and user feedback
+  - Added proper ID tracking between requests and content

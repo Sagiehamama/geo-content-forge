@@ -14,17 +14,36 @@ export interface MediaImageSpot {
 
 export interface MediaAgentResponse {
   images: MediaImageSpot[];
+  error?: string;
+  code?: string;
 }
 
-export async function getMediaSuggestions({ markdown, title, tags, summary }:{ markdown: string, title?: string, tags?: string[], summary?: string }): Promise<MediaImageSpot[]> {
+export interface MediaAgentParams {
+  markdown: string;
+  title: string;
+  customDescription?: string;
+}
+
+export const getMediaSuggestions = async (params: MediaAgentParams): Promise<MediaImageSpot[]> => {
   try {
     const { data, error } = await supabase.functions.invoke('media-agent', {
-      body: { markdown, title, tags, summary },
+      body: params
     });
-    if (error) throw new Error(error.message || 'Failed to get media suggestions');
-    if (!data || !data.images) throw new Error('No image suggestions returned');
-    return data.images;
-  } catch (err: any) {
-    throw new Error(err.message || 'An unexpected error occurred while fetching media suggestions.');
+
+    if (error) {
+      throw new Error(error.message || 'Failed to get media suggestions');
+    }
+
+    if (data.error) {
+      if (data.code === 'OPENAI_RATE_LIMIT') {
+        throw new Error('OpenAI API rate limit reached. Please wait a few seconds and try again.');
+      }
+      throw new Error(data.error);
+    }
+
+    return data.images || [];
+  } catch (error: any) {
+    console.error('Error in getMediaSuggestions:', error);
+    throw error;
   }
-} 
+}; 
