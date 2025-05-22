@@ -22,6 +22,8 @@ serve(async (req) => {
 
   try {
     const { formData, templateId } = await req.json();
+    // Log every incoming request
+    console.log(`[${new Date().toISOString()}] generate-content request:`, formData?.prompt);
     
     if (!formData) {
       return new Response(
@@ -113,6 +115,16 @@ ${formData.toneUrl ? `The content should mimic the writing style found at: ${for
             details: error.error
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 402 }
+        );
+      }
+      if (error.error?.code === "rate_limit_exceeded") {
+        return new Response(
+          JSON.stringify({
+            error: 'OpenAI API rate limit reached. Please wait a few seconds and try again.',
+            code: 'OPENAI_RATE_LIMIT',
+            details: error.error
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
         );
       }
       

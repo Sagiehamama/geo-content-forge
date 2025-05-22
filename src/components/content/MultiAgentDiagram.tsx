@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Network, Database, BrainCircuit, Globe, Layers } from 'lucide-react';
+import { Network, Database, BrainCircuit, Globe, Layers, Image as ImageIcon } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 
@@ -27,7 +26,7 @@ const MultiAgentDiagram = () => {
     <div className="py-4">
       <h2 className="text-xl font-bold text-center mb-3">Multi-Agent Environment</h2>
       
-      <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-6 gap-2">
         <AgentCard 
           icon={<Network size={18} />}
           title="Research Agent"
@@ -52,6 +51,11 @@ const MultiAgentDiagram = () => {
           icon={<Layers size={18} />}
           title="Content Repurposing"
           description="Adapts for different formats and channels"
+        />
+        <AgentCard 
+          icon={<ImageIcon size={18} />}
+          title="Media Agent"
+          description="Finds and suggests relevant images for your content."
         />
       </div>
       
@@ -101,6 +105,15 @@ const MultiAgentDiagram = () => {
                   icon={<Layers size={18} />}
                   title="Content Repurposing"
                   description="Adapts for different formats and channels"
+                />
+              </div>
+            </CarouselItem>
+            <CarouselItem>
+              <div className="p-1">
+                <AgentCard 
+                  icon={<ImageIcon size={18} />}
+                  title="Media Agent"
+                  description="Finds and suggests relevant images for your content."
                 />
               </div>
             </CarouselItem>

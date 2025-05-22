@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,62 +10,70 @@ import { generateContent } from '@/services/contentGeneratorService';
 import { FormData, GeneratedContent } from '@/components/content/form/types';
 import ReactMarkdown from 'react-markdown';
 import { getMediaSuggestions, MediaImageSpot } from '@/services/mediaAgentService';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80';
 
 const ResultsPage = () => {
   const navigate = useNavigate();
   
-  // This would normally come from an API
-  const formData: FormData = JSON.parse(localStorage.getItem('contentFormData') || '{}');
+  // Use useMemo to stabilize formData reference if it comes from localStorage and parsed on each render
+  const formData = useMemo(() => {
+    const formDataString = localStorage.getItem('contentFormData');
+    return JSON.parse(formDataString || '{}') as FormData;
+  }, []); // Empty dependency array means formData is memoized once on mount
   
   // Content generation state
   const [isLoading, setIsLoading] = useState(true);
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [contentRetryCount, setContentRetryCount] = useState(0); // For retrying content generation
   
   // Media suggestions state
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [mediaSpots, setMediaSpots] = useState<MediaImageSpot[]>([]);
   const [selectedImages, setSelectedImages] = useState<{ [location: string]: string }>({});
+  const [mediaRetryCount, setMediaRetryCount] = useState(0);
   
   useEffect(() => {
     const generateContentAsync = async () => {
+      // Ensure formData is valid before proceeding
+      if (!formData || !formData.prompt) {
+        setError("Missing form data. Please go back and fill out the content form.");
+        setIsLoading(false);
+        return;
+      }
+      
+      setIsLoading(true);
+      setError(null);
       try {
-        // Check if we have valid form data
-        if (!formData || !formData.prompt) {
-          setError("Missing form data. Please go back and fill out the content form.");
-          setIsLoading(false);
-          return;
-        }
-        
-        // Generate content based on form data
+        console.log(`[${new Date().toISOString()}] Frontend: Calling generateContent`);
         const generatedContent = await generateContent(formData);
         setContent(generatedContent);
-      } catch (error) {
-        console.error('Error generating content:', error);
-        // Use the error message from the service, which now includes user-friendly messages
-        setError(error.message || 'An unexpected error occurred. Please try again.');
+      } catch (err: any) {
+        console.error('Error generating content:', err);
+        setError(err.message || 'An unexpected error occurred during content generation.');
       } finally {
         setIsLoading(false);
       }
     };
     
     generateContentAsync();
-  }, [formData]);
+  }, [formData, contentRetryCount]); // Depend on memoized formData and contentRetryCount
   
   // Fetch media suggestions after content is generated
   useEffect(() => {
     if (content && content.content) {
       setMediaLoading(true);
       setMediaError(null);
+      console.log(`[${new Date().toISOString()}] Frontend: Calling getMediaSuggestions`);
       getMediaSuggestions({ markdown: content.content, title: content.title })
         .then(spots => setMediaSpots(spots))
-        .catch(err => setMediaError(err.message))
+        .catch(err => setMediaError(err.message || 'Failed to get media suggestions.'))
         .finally(() => setMediaLoading(false));
     }
-  }, [content]);
+  }, [content, mediaRetryCount]); // content should now be stable after the first effect fix
   
   const handleCopyContent = () => {
     if (content) {
@@ -134,6 +142,14 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
     return selectedImages[location] || PLACEHOLDER_IMAGE;
   };
   
+  // Handler for retrying content generation
+  const handleRetryContent = () => {
+    setContentRetryCount(c => c + 1);
+  };
+  
+  // Retry handler for media agent
+  const handleRetryMedia = () => setMediaRetryCount(c => c + 1);
+  
   return (
     <div className="container py-8">
       <div className="mb-8">
@@ -153,23 +169,21 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
             </div>
           </CardContent>
         </Card>
-      ) : error ? (
+      ) : error && !content ? ( // Important: only show this primary error/retry if content hasn't loaded at all
         <Card className="mb-8">
           <CardContent className="pt-6">
             <div className="flex flex-col items-center justify-center py-12">
               <p className="text-lg font-medium text-center text-red-500">Error</p>
               <p className="text-muted-foreground mt-2 text-center mb-4">
-                {error}
+                {error} 
               </p>
               <div className="space-y-2">
-                <Button onClick={() => navigate('/')}>
-                  Return to Form
-                </Button>
+                <Button onClick={() => navigate('/')}>Return to Form</Button>
+                {(error.includes('rate limit') || error.includes('429') || error.includes('OpenAI API quota')) && (
+                   <Button onClick={handleRetryContent}>Try Again</Button>
+                )}
                 {error.includes('OpenAI API quota') && (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => window.open('https://platform.openai.com/account/billing', '_blank')}
-                  >
+                  <Button variant="outline" onClick={() => window.open('https://platform.openai.com/account/billing', '_blank')}>
                     Check OpenAI Billing
                   </Button>
                 )}
@@ -352,7 +366,16 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
             </div>
           )}
           {mediaError && (
-            <div className="text-red-600 text-center my-4">{mediaError}</div>
+            <div className="text-red-600 text-center my-4">
+              {mediaError.includes('rate limit') || mediaError.includes('429') ? (
+                <>
+                  <div>OpenAI API rate limit reached. Please wait a few seconds and try again.</div>
+                  <Button onClick={handleRetryMedia} className="mt-2">Try Again</Button>
+                </>
+              ) : (
+                <>{mediaError}</>
+              )}
+            </div>
           )}
           {mediaSpots.length > 0 && (
             <div className="my-8">
@@ -362,7 +385,16 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
                   <div className="mb-2 flex items-center gap-2">
                     <span className="font-medium">Image spot:</span>
                     <span className="text-muted-foreground">{spot.location.replace(/_/g, ' ')}</span>
-                    <Info className="h-4 w-4 text-muted-foreground" title="This is where the image will appear in your article." />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-4 w-4 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>This is where the image will appear in your article.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                   <div className="flex gap-4 flex-wrap">
                     {spot.options.map(option => (

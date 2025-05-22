@@ -39,6 +39,8 @@ serve(async (req) => {
 
   try {
     const { markdown, title, tags, summary } = await req.json();
+    // Log every incoming request
+    console.log(`[${new Date().toISOString()}] media-agent request:`, title || markdown?.slice(0, 40));
     if (!markdown) {
       return new Response(
         JSON.stringify({ error: 'Missing markdown content' }),
@@ -92,6 +94,16 @@ serve(async (req) => {
 
     if (!completion.ok) {
       const error = await completion.json();
+      if (error.error?.code === "rate_limit_exceeded") {
+        return new Response(
+          JSON.stringify({
+            error: 'OpenAI API rate limit reached. Please wait a few seconds and try again.',
+            code: 'OPENAI_RATE_LIMIT',
+            details: error.error
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+        );
+      }
       return new Response(
         JSON.stringify({ error: 'Error calling OpenAI API', details: error }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
