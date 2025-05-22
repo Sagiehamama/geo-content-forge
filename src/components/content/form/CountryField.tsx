@@ -1,7 +1,6 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -9,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { countries } from './constants';
 
 interface CountryFieldProps {
@@ -22,6 +22,16 @@ export const CountryField: React.FC<CountryFieldProps> = ({
   onChange, 
   isDetecting 
 }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Filter countries based on search query
+  const filteredCountries = searchQuery 
+    ? countries.filter(country => 
+        country.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        country.code.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : countries;
+  
   return (
     <div className="space-y-2">
       <Label htmlFor="country">Country</Label>
@@ -43,11 +53,27 @@ export const CountryField: React.FC<CountryFieldProps> = ({
             )}
           </SelectTrigger>
           <SelectContent>
-            {countries.map((country) => (
-              <SelectItem key={country.code} value={country.code}>
-                {country.name}
-              </SelectItem>
-            ))}
+            <div className="flex items-center px-2 pb-2 sticky top-0 bg-white z-10 border-b">
+              <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+              <Input
+                placeholder="Search country..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 w-full"
+              />
+            </div>
+            <div className="max-h-[300px] overflow-auto">
+              {filteredCountries.map((country) => (
+                <SelectItem key={country.code} value={country.code}>
+                  {country.name}
+                </SelectItem>
+              ))}
+              {filteredCountries.length === 0 && (
+                <div className="p-2 text-center text-sm text-muted-foreground">
+                  No countries found
+                </div>
+              )}
+            </div>
           </SelectContent>
         </Select>
       </div>

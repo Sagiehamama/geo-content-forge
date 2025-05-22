@@ -34,12 +34,12 @@ const MultiAgentDiagram = () => {
         />
         <AgentCard 
           icon={<BrainCircuit size={18} />}
-          title="Content Generation"
+          title="Content Generation Agent"
           description="Creates engaging, original content"
         />
         <AgentCard 
           icon={<Database size={18} />}
-          title="Fact Checking"
+          title="Fact Checking Agent"
           description="Validates information accuracy"
         />
         <AgentCard 
@@ -49,7 +49,7 @@ const MultiAgentDiagram = () => {
         />
         <AgentCard 
           icon={<Layers size={18} />}
-          title="Content Repurposing"
+          title="Content Repurposing Agent"
           description="Adapts for different formats and channels"
         />
         <AgentCard 
@@ -76,7 +76,7 @@ const MultiAgentDiagram = () => {
               <div className="p-1">
                 <AgentCard 
                   icon={<BrainCircuit size={18} />}
-                  title="Content Generation"
+                  title="Content Generation Agent"
                   description="Creates engaging, original content"
                 />
               </div>
@@ -85,7 +85,7 @@ const MultiAgentDiagram = () => {
               <div className="p-1">
                 <AgentCard 
                   icon={<Database size={18} />}
-                  title="Fact Checking"
+                  title="Fact Checking Agent"
                   description="Validates information accuracy"
                 />
               </div>
@@ -103,7 +103,7 @@ const MultiAgentDiagram = () => {
               <div className="p-1">
                 <AgentCard 
                   icon={<Layers size={18} />}
-                  title="Content Repurposing"
+                  title="Content Repurposing Agent"
                   description="Adapts for different formats and channels"
                 />
               </div>
