@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -48,8 +49,8 @@ const FormSection = () => {
   };
 
   const handleToneTypeChange = (value: string) => {
-    if (value) {
-      setFormData({ ...formData, toneType: value as 'description' | 'url' });
+    if (value === 'description' || value === 'url') {
+      setFormData({ ...formData, toneType: value });
     }
   };
 
@@ -150,6 +151,12 @@ const FormSection = () => {
           <LanguageField 
             value={formData.language}
             onChange={(value) => handleSelectChange('language', value)}
+          />
+          
+          {/* Target Audience */}
+          <AudienceField
+            value={formData.audience}
+            onChange={handleInputChange}
           />
           
           {/* Tone of Voice */}

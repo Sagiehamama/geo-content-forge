@@ -1,9 +1,10 @@
 
 import { useState, useEffect } from 'react';
+import { FormData } from './types';
 import { countries } from './constants';
 
 export const useLocationDetection = (
-  setFormData: React.Dispatch<React.SetStateAction<{ country: string, language?: string }>>
+  setFormData: React.Dispatch<React.SetStateAction<FormData>>
 ) => {
   const [isDetectingLocation, setIsDetectingLocation] = useState(true);
 
