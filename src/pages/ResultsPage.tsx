@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { FileInput, Search, Calendar, Tag, Clock, Code } from 'lucide-react';
 import { languages } from '@/constants/languages';
 import { generateContent, getOpenAIApiKey, setOpenAIApiKey } from '@/services/contentGeneratorService';
-import { FormData, GeneratedContent, mockGeneratedContent } from '@/components/content/form/types';
+import { FormData, GeneratedContent } from '@/components/content/form/types';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
@@ -369,7 +369,6 @@ ${content.frontmatter.featuredImage ? `featuredImage: ${content.frontmatter.feat
                   </dl>
                   <p className="text-sm text-muted-foreground mt-4 border-t pt-4">
                     Note: The reading time is calculated based on an average reading speed of 200 words per minute.
-                    Currently, no actual SEO analysis, readability scoring, or fact checking is performed.
                   </p>
                 </CardContent>
               </Card>

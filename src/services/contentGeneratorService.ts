@@ -123,7 +123,6 @@ export const saveContentTemplate = async (template: Partial<ContentTemplate>): P
     }
     
     const templateToSave = {
-      id: template.id || undefined,
       name: template.name,
       description: template.description || null,
       system_prompt: template.system_prompt,
@@ -131,6 +130,11 @@ export const saveContentTemplate = async (template: Partial<ContentTemplate>): P
       is_default: template.is_default ?? false,
       updated_at: new Date().toISOString()
     };
+    
+    // Add the id if it exists (for updates)
+    if (template.id) {
+      templateToSave['id'] = template.id;
+    }
     
     const { data, error } = await supabase
       .from('content_templates')
@@ -193,7 +197,7 @@ export const generateContent = async (formData: FormData, templateId?: string): 
         include_frontmatter: formData.includeFrontmatter,
         use_ai_media: formData.useAiMedia,
         word_count: formData.wordCount || 1000,
-        audience: formData.audience
+        audience: formData.audience || 'General readers'
       })
       .select()
       .single();
@@ -225,7 +229,6 @@ export const generateContent = async (formData: FormData, templateId?: string): 
         frontmatter: JSON.stringify(data.frontmatter),  // Convert to string to fix Json type issue
         word_count: data.wordCount,
         reading_time: data.readingTime
-        // Note: removed seo_score, readability_score and fact_check_score since they aren't actually calculated
       });
       
     if (contentError) throw contentError;
@@ -238,7 +241,7 @@ export const generateContent = async (formData: FormData, templateId?: string): 
 };
 
 // Get content history from database
-export const getContentHistory = async (): Promise<(GeneratedContent & { generatedAt: string })[]> => {
+export const getContentHistory = async (): Promise<GeneratedContent & { generatedAt: string }[]> => {
   try {
     const { data, error } = await supabase
       .from('generated_content')

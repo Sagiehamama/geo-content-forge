@@ -146,7 +146,7 @@ ${formData.toneUrl ? `The content should mimic the writing style found at: ${for
     const wordCount = generatedContent.split(/\s+/).length;
     const readingTime = Math.ceil(wordCount / 200);
 
-    // Create the response object with actual content data, but NO mock metrics
+    // Create the response object with actual content data and no mock metrics
     const responseObject = {
       title: frontmatter.title,
       content: generatedContent,

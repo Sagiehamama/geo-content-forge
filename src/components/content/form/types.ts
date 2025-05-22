@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 export interface FormData {
@@ -12,6 +13,7 @@ export interface FormData {
   wordCount: number;
   includeImages: boolean;
   includeFrontmatter: boolean;
+  audience: string;  // Added this field
 }
 
 export const initialFormData: FormData = {
@@ -26,6 +28,7 @@ export const initialFormData: FormData = {
   wordCount: 1000,
   includeImages: true,
   includeFrontmatter: true,
+  audience: '',  // Initialize with empty string
 };
 
 export const formSchema = z.object({
@@ -39,21 +42,20 @@ export const formSchema = z.object({
   wordCount: z.number().min(300).max(3000),
   includeImages: z.boolean(),
   includeFrontmatter: z.boolean(),
+  audience: z.string().optional(),
 });
 
 export interface GeneratedContent {
-  id?: string; // Make id optional so it can be added after database fetch
+  id?: string;
   title: string;
   content: string;
   frontmatter: ContentFrontmatter;
   images: ContentImage[];
   readingTime: number;
   wordCount: number;
-  seoScore: number;
-  readabilityScore: string;
-  factCheckScore: number;
-  prompt?: string; // Add optional prompt property
-  language?: string; // Add optional language property
+  prompt?: string;
+  language?: string;
+  // Removed seoScore, readabilityScore, and factCheckScore properties
 }
 
 // For the content history
@@ -172,8 +174,6 @@ Remember, SEO is not about tricking search engines but about providing value to 
     }
   ],
   readingTime: 5,
-  wordCount: 650,
-  seoScore: 94,
-  readabilityScore: "Grade 8",
-  factCheckScore: 100
+  wordCount: 650
 };
+
