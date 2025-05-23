@@ -24,3 +24,10 @@
   - Better handling of content retries and media refreshes
   - Improved error handling and user feedback
   - Added proper ID tracking between requests and content
+- **PLANNED: Research Agent Implementation (2024-12-XX)**
+  - Reddit-focused research agent to discover original insights
+  - Multi-step pipeline: subreddit discovery → post scraping → insight classification
+  - Puppeteer-based scraping for bypassing API limits
+  - LLM-powered insight evaluation and prompt enrichment
+  - UI integration with research toggle and insight display
+  - Database schema updates for research metadata storage

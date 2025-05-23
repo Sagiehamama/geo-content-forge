@@ -22,6 +22,7 @@ import { ToneField } from './form/ToneField';
 import { MediaField } from './form/MediaField';
 import { WordCountField } from './form/WordCountField';
 import { ContentOptionsField } from './form/ContentOptionsField';
+import { ResearchField } from './form/ResearchField';
 import { useLocationDetection } from './form/useLocationDetection';
 import { useContent } from '@/context/ContentContext';
 
@@ -201,6 +202,14 @@ const FormSection = () => {
           <ContentOptionsField 
             includeFrontmatter={localFormData.includeFrontmatter}
             onSwitchChange={handleSwitchChange}
+          />
+          
+          {/* Research Agent */}
+          <ResearchField
+            enableResearch={localFormData.enableResearch}
+            researchQuery={localFormData.researchQuery || ''}
+            onSwitchChange={(checked) => handleSwitchChange('enableResearch', checked)}
+            onQueryChange={handleInputChange}
           />
           
           {/* AI Media */}

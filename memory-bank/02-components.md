@@ -3,10 +3,17 @@
 ## UI Components
 - **Input Page:**
   - User prompt, location, language, tone, media, word count
+  - **Company description field for Research Agent context**
+  - **Research Agent toggle (enable/disable Reddit research)**
   - Geolocation API for location
   - Tone presets saved to user profile
   - Dynamic template variables support
 - **Results Page:**
+  - **Reddit Insight Display:**
+    - Shows when Research Agent found valuable insights
+    - Displays enriched prompt with Reddit context
+    - Links to original Reddit post (optional)
+    - Fallback message when no insights found
   - Preview with enhanced Markdown rendering
   - Quality metrics (fact check, readability, SEO scores)
   - Content cleanup and formatting
@@ -23,11 +30,13 @@
     - Better handling of alt text and captions
 - **History Page:**
   - List, view, edit, repurpose saved articles/snippets
+  - **Shows Reddit insight indicator when content used Research Agent**
   - Filters by date, topic, status
   - Enhanced content preview
   - Better state restoration
 - **Settings Tab/Page:**
   - View and edit the system prompt template for the Content Creator agent
+  - **View and edit the Research Agent prompt templates**
   - **View and edit the Media Agent prompt**
   - Fetches and updates the prompt templates from the `content_templates` table
   - Simple text area or code editor for editing
@@ -36,9 +45,12 @@
 ## Backend Components
 - **Supabase Database:** 
   - Enhanced schema for content, user sessions, history, tones
+  - **Research insights storage with metadata**
+  - **Subreddit caching for performance**
   - Proper JSON handling for structured data
   - Quality metrics storage
 - **Edge Functions:** 
+  - **Research Agent with Reddit scraping via Puppeteer**
   - Content generation with template support
   - QA and optimization
   - Media search with custom descriptions

@@ -14,6 +14,9 @@ export interface FormData {
   wordCount: number;
   includeFrontmatter: boolean;
   includeImages?: boolean;
+  // Research Agent fields
+  enableResearch: boolean;
+  researchQuery?: string;
 }
 
 export const initialFormData: FormData = {
@@ -29,6 +32,9 @@ export const initialFormData: FormData = {
   wordCount: 1000,
   includeFrontmatter: true,
   includeImages: false,
+  // Research Agent defaults
+  enableResearch: false,
+  researchQuery: '',
 };
 
 export const formSchema = z.object({
@@ -54,6 +60,8 @@ export interface GeneratedContent {
   wordCount: number;
   prompt?: string;
   language?: string;
+  // Research insights
+  researchInsights?: ResearchInsight[];
 }
 
 // For the content history
@@ -77,6 +85,18 @@ export interface ContentImage {
   alt: string;
   caption: string;
   source?: string;
+}
+
+// Research Agent types
+export interface ResearchInsight {
+  id: string;
+  insight: string;
+  relevanceScore: number;
+  source: string;
+  sourceUrl: string;
+  postTitle: string;
+  threadAnalysis: string;
+  keywords: string[];
 }
 
 // Mock content is removed as we now have real data

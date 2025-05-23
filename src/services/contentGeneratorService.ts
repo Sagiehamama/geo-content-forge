@@ -2,15 +2,47 @@ import { FormData, GeneratedContent } from "@/components/content/form/types";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import { conductResearch } from "./researchService";
 
 // Generate content using Edge Function
 export const generateContent = async (formData: FormData): Promise<GeneratedContent | null> => {
   try {
     console.log('Sending request to generate content with data:', formData);
     
-    // Call the Supabase Edge Function
+    let enrichedPrompt = formData.prompt;
+    let researchInsights: any[] = [];
+    
+    // Conduct research if enabled
+    if (formData.enableResearch) {
+      try {
+        console.log('Research enabled - conducting Reddit research...');
+        const researchQuery = formData.researchQuery || formData.prompt;
+        const researchResult = await conductResearch(
+          researchQuery,
+          formData.prompt,
+          formData.company
+        );
+        
+        enrichedPrompt = researchResult.enrichedPrompt;
+        researchInsights = researchResult.insights;
+        
+        console.log(`Research completed: ${researchInsights.length} insights found`);
+        toast.success(`Research completed: ${researchInsights.length} insights discovered`);
+      } catch (researchError) {
+        console.error('Research failed, continuing with original prompt:', researchError);
+        toast.error('Research failed, generating content with original prompt');
+        // Continue with original prompt if research fails
+      }
+    }
+    
+    // Call the Supabase Edge Function with enriched prompt
     const { data, error } = await supabase.functions.invoke("generate-content", {
-      body: { formData },
+      body: { 
+        formData: {
+          ...formData,
+          prompt: enrichedPrompt
+        }
+      },
     });
     
     if (error) {
@@ -55,6 +87,7 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
       id: dbIds.generatedContentId,
       requestId: dbIds.requestId,
       images: data.images || [],
+      researchInsights: researchInsights,
     };
   } catch (error) {
     console.error('Error in generateContent:', error);

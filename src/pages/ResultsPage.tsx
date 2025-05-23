@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { ImageOption } from '@/components/content/ImageOption';
+import { ResearchInsights } from '@/components/content/ResearchInsights';
 
 // Results page component - handles content display and image selection
 // Use a path to an image in the public folder
@@ -690,6 +691,13 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                     </div>
                   </CardContent>
                 </Card>
+                
+                {/* Research Insights */}
+                {contextContent?.researchInsights && contextContent.researchInsights.length > 0 && (
+                  <div className="mb-6">
+                    <ResearchInsights insights={contextContent.researchInsights} />
+                  </div>
+                )}
                 
                 <Card>
                   <CardHeader className="pb-3">
