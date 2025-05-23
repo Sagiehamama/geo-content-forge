@@ -118,7 +118,7 @@ const SettingsPage = () => {
               />
               <label className="block mb-2 font-medium">
                 Content - User Prompt Template
-                <span style={tooltipStyle} title="This is the template for the specific task given to the AI for content generation. It typically includes placeholders like '{prompt}' for the user's main topic/keyword, '{language}' for output language, and '{word_count}' for article length. It instructs the AI on structure, sections, and specific elements to include based on user input parameters.">ⓘ</span>
+                <span style={tooltipStyle} title="This is the template for the specific task given to the AI for content generation. It includes placeholders like '{prompt}' for the user's main topic/keyword, '{company}' for company/brand context, '{language}' for output language, and '{word_count}' for article length. It instructs the AI on structure, sections, and specific elements to include based on user input parameters.">ⓘ</span>
               </label>
               <textarea
                 className="w-full min-h-[250px] border rounded-md p-2 mb-6 font-mono text-sm"

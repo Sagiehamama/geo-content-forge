@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 // Import form types and custom components
 import { FormData, initialFormData } from './form/types';
 import { PromptField } from './form/PromptField';
+import { CompanyField } from './form/CompanyField';
 import { CountryField } from './form/CountryField';
 import { LanguageField } from './form/LanguageField';
 import { ToneField } from './form/ToneField';
@@ -165,6 +166,12 @@ const FormSection = () => {
           {/* AI Prompt */}
           <PromptField 
             value={localFormData.prompt} 
+            onChange={handleInputChange} 
+          />
+          
+          {/* Company Context */}
+          <CompanyField 
+            value={localFormData.company} 
             onChange={handleInputChange} 
           />
           

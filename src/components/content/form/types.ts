@@ -3,6 +3,7 @@ import { z } from "zod";
 export interface FormData {
   id?: string;
   prompt: string;
+  company: string;
   country: string;
   language: string;
   tone: string;
@@ -17,6 +18,7 @@ export interface FormData {
 
 export const initialFormData: FormData = {
   prompt: '',
+  company: '',
   country: '',
   language: 'en',
   tone: '',
@@ -31,6 +33,7 @@ export const initialFormData: FormData = {
 
 export const formSchema = z.object({
   prompt: z.string().min(1, { message: "Please enter an AI prompt to rank for" }),
+  company: z.string().optional(),
   country: z.string(),
   language: z.string(),
   tone: z.string().optional(),

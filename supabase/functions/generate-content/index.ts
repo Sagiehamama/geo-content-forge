@@ -73,15 +73,30 @@ The country focus should be: ${formData.country || 'Global'}
 The target language is: ${formData.language || 'English'}
 Word count should be approximately: ${formData.wordCount || 1000} words
 
+${formData.company ? `Company/Brand Context: ${formData.company}` : ''}
 ${formData.toneUrl ? `The content should mimic the writing style found at: ${formData.toneUrl}` : ''}`;
 
     // Process user prompt template with variable replacements
-    const userPrompt = templateData.user_prompt
-      .replace('${prompt}', formData.prompt)
-      .replace('${includeFrontmatter ? "Include YAML frontmatter with metadata (title, description, tags, slug, author, date)." : ""}', 
-               formData.includeFrontmatter ? "Include YAML frontmatter with metadata (title, description, tags, slug, author, date)." : "")
-      .replace('${includeImages ? "Describe where images should be placed with suggested alt text and captions." : ""}',
-               formData.includeImages ? "Describe where images should be placed with suggested alt text and captions." : "");
+    // Set up variables for template literal processing
+    const prompt = formData.prompt;
+    const company = formData.company || '';
+    const includeFrontmatter = formData.includeFrontmatter;
+    const includeImages = formData.includeImages;
+    
+    // Use Function constructor for safe template literal evaluation
+    const templateFunction = new Function('prompt', 'company', 'includeFrontmatter', 'includeImages', 
+      'return `' + templateData.user_prompt + '`;'
+    );
+    const userPrompt = templateFunction(prompt, company, includeFrontmatter, includeImages);
+    
+    // Debug logging
+    console.log("=== DEBUGGING COMPANY FIELD ===");
+    console.log("formData.company value:", JSON.stringify(formData.company));
+    console.log("Company field length:", formData.company ? formData.company.length : 0);
+    console.log("=== FINAL PROMPTS TO OPENAI ===");
+    console.log("System Prompt:", systemPrompt);
+    console.log("User Prompt:", userPrompt);
+    console.log("================================");
     
     // Call OpenAI API
     console.log("Calling OpenAI API with template:", templateData.name);

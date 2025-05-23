@@ -126,6 +126,12 @@ const ResultsPage = () => {
   
   // Fetch media suggestions if needed
   useEffect(() => {
+    // Don't auto-refresh if user is doing custom search
+    if (useCustomDescription) {
+      console.log('Skipping auto-refresh because useCustomDescription is true');
+      return;
+    }
+    
     if (contextContent && contextContent.content && contextMediaSpots.length === 0) {
       setMediaLoading(true);
       setMediaError(null);
@@ -157,7 +163,7 @@ const ResultsPage = () => {
         })
         .finally(() => setMediaLoading(false));
     }
-  }, [contextContent, mediaRetryCount, contextMediaSpots, setMediaSpots]);
+  }, [contextContent, mediaRetryCount, contextMediaSpots, setMediaSpots, useCustomDescription]);
   
   const handleCopyContent = () => {
     if (contextContent) {
@@ -312,9 +318,9 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       console.log('Calling getMediaSuggestions with custom description');
       await handleRefreshImages(customDescription);
       
-      // Reset UI
-      setUseCustomDescription(false);
-      console.log('Reset useCustomDescription to false');
+      // DON'T reset UI - keep useCustomDescription true so user knows they're using custom search
+      // setUseCustomDescription(false);
+      // console.log('Reset useCustomDescription to false');
     }
   };
   
@@ -645,6 +651,15 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                         </p>
                       </div>
                       
+                      {contextFormData?.company && (
+                        <div>
+                          <p className="text-sm font-medium mb-1">Company/Brand Context</p>
+                          <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                            {contextFormData.company}
+                          </p>
+                        </div>
+                      )}
+                      
                       <div>
                         <p className="text-sm font-medium mb-1">Content Type</p>
                         <p className="text-sm text-muted-foreground">
@@ -777,71 +792,60 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
             </DialogDescription>
           </DialogHeader>
 
-          {!useCustomDescription && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-4">
-              {selectedSpot && contextMediaSpots.map(spot => {
-                if (spot.location !== selectedSpot) return null;
-                return spot.options.map((option, idx) => (
-                  <ImageOption
-                    key={`${spot.location}-${idx}`}
-                    option={option}
-                    onSelect={() => handleSelectImage(option)}
-                  />
-                ));
-              })}
-              <ImageOption
-                option={null}
-                onSelect={() => handleSelectImage(null)}
-              />
-            </div>
-          )}
-
-          {useCustomDescription && (
-            <div className="space-y-4 my-4">
-              <Input
-                placeholder="Describe the image you want (e.g., 'professional swimwear photoshoot on beach')"
-                value={customDescription}
-                onChange={(e) => setCustomDescription(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && customDescription.trim()) {
-                    handleCustomSearch();
-                  }
-                }}
-              />
-            </div>
-          )}
-
-          <DialogFooter className="flex items-center justify-between pt-4 border-t">
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
+          {/* Action buttons at the top for better UX */}
+          <div className="flex items-center gap-2 py-2 border-b">
+            <Button 
+              variant={!useCustomDescription ? "default" : "outline"}
+              size="sm"
+              onClick={() => setUseCustomDescription(false)}
+            >
+              AI Suggestions
+            </Button>
+            <Button 
+              variant={useCustomDescription ? "default" : "outline"}
+              size="sm"
+              onClick={() => setUseCustomDescription(true)}
+            >
+              Custom Search
+            </Button>
+            {!useCustomDescription && (
+              <Button
                 size="sm"
-                onClick={() => setUseCustomDescription(true)}
+                variant="outline"
+                onClick={handleRefreshClick}
+                disabled={mediaLoading}
               >
-                Custom Description
+                {mediaLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </>
+                )}
               </Button>
-              {!useCustomDescription && (
+            )}
+          </div>
+
+          {/* Custom search input - appears right after clicking Custom Search */}
+          {useCustomDescription && (
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Describe the image you want (e.g., 'professional swimwear photoshoot on beach')"
+                  value={customDescription}
+                  onChange={(e) => setCustomDescription(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && customDescription.trim()) {
+                      handleCustomSearch();
+                    }
+                  }}
+                  className="flex-1"
+                />
                 <Button
-                  size="sm"
-                  onClick={handleRefreshClick}
-                  disabled={mediaLoading}
-                >
-                  {mediaLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Refresh Images
-                    </>
-                  )}
-                </Button>
-              )}
-              {useCustomDescription && (
-                <Button
-                  size="sm"
                   onClick={handleCustomSearch}
                   disabled={mediaLoading || !customDescription.trim()}
                 >
@@ -854,10 +858,31 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                     'Search'
                   )}
                 </Button>
-              )}
+              </div>
             </div>
-            <Button onClick={() => setSelectedSpot(null)} variant={useCustomDescription ? "outline" : "default"}>
-              {useCustomDescription ? 'Cancel' : 'Select'}
+          )}
+
+          {/* Image results */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-4">
+            {selectedSpot && contextMediaSpots.map(spot => {
+              if (spot.location !== selectedSpot) return null;
+              return spot.options.map((option, idx) => (
+                <ImageOption
+                  key={`${spot.location}-${idx}`}
+                  option={option}
+                  onSelect={() => handleSelectImage(option)}
+                />
+              ));
+            })}
+            <ImageOption
+              option={null}
+              onSelect={() => handleSelectImage(null)}
+            />
+          </div>
+
+          <DialogFooter className="flex items-center justify-end pt-4 border-t">
+            <Button onClick={() => setSelectedSpot(null)} variant="outline">
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -867,3 +892,4 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
 };
 
 export default ResultsPage;
+

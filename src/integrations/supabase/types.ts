@@ -36,12 +36,15 @@ export type Database = {
       content_requests: {
         Row: {
           audience: string | null
+          company: string | null
           country: string | null
           created_at: string
           id: string
           include_frontmatter: boolean | null
           include_images: boolean | null
           language: string
+          media_file: string | null
+          media_mode: string
           prompt: string
           tone: string | null
           tone_type: string | null
@@ -51,12 +54,15 @@ export type Database = {
         }
         Insert: {
           audience?: string | null
+          company?: string | null
           country?: string | null
           created_at?: string
           id?: string
           include_frontmatter?: boolean | null
           include_images?: boolean | null
           language: string
+          media_file?: string | null
+          media_mode?: string
           prompt: string
           tone?: string | null
           tone_type?: string | null
@@ -66,12 +72,15 @@ export type Database = {
         }
         Update: {
           audience?: string | null
+          company?: string | null
           country?: string | null
           created_at?: string
           id?: string
           include_frontmatter?: boolean | null
           include_images?: boolean | null
           language?: string
+          media_file?: string | null
+          media_mode?: string
           prompt?: string
           tone?: string | null
           tone_type?: string | null
@@ -124,6 +133,7 @@ export type Database = {
           frontmatter: Json | null
           generated_at: string
           id: string
+          images: Json
           readability_score: string | null
           reading_time: number | null
           request_id: string
@@ -137,6 +147,7 @@ export type Database = {
           frontmatter?: Json | null
           generated_at?: string
           id?: string
+          images?: Json
           readability_score?: string | null
           reading_time?: number | null
           request_id: string
@@ -150,6 +161,7 @@ export type Database = {
           frontmatter?: Json | null
           generated_at?: string
           id?: string
+          images?: Json
           readability_score?: string | null
           reading_time?: number | null
           request_id?: string
@@ -292,4 +304,4 @@ export const Constants = {
   public: {
     Enums: {},
   },
-} as const 
+} as const

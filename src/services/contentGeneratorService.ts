@@ -70,6 +70,7 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
       .from('content_requests')
       .insert({
         prompt: formData.prompt,
+        company: formData.company,
         language: formData.language,
         country: formData.country,
         tone: formData.tone,

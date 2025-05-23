@@ -39,7 +39,7 @@ async function searchImages(query: string) {
   try {
     console.log('Searching Unsplash for (exact query):', query);
     const response = await fetch(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=3`,
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape`,
       {
         headers: {
           'Authorization': `Client-ID ${unsplashAccessKey}`
@@ -127,42 +127,38 @@ serve(async (req) => {
     }
 
     // Default media agent prompt if none exists
-    const DEFAULT_MEDIA_AGENT_PROMPT = `You are a specialized Media Selection Agent for a content creation platform. Your task is to analyze Markdown content and identify 1-3 optimal spots where images would enhance the article.
+    const DEFAULT_MEDIA_AGENT_PROMPT = `You are an AI assistant specialized in enhancing blog articles with relevant visuals.
+Your task is to analyze the provided Markdown content and identify 1 to 3 optimal locations where an image would significantly improve reader engagement and comprehension.
 
-INSTRUCTIONS:
-1. Analyze the provided Markdown article thoroughly
-2. Identify 1-3 strategic locations where images would enhance reader engagement and understanding
-3. For each location, create a descriptive tag (e.g., "product_showcase", "feature_highlight", "comparison")
-4. Generate a specific image search query that would find highly relevant, visually appealing images for that location
-5. Return your analysis as a properly formatted JSON array
+For each identified location, you must provide:
+1.  A 'location_tag': A unique, simple, and descriptive tag for this spot, using snake_case (e.g., 'after_introduction_hook', 'key_benefit_illustration', 'how_it_works_diagram_spot'). This tag will be used as an internal identifier.
+2.  A 'search_query': A concise and effective search query (2-4 words max) that could be used with a stock photo API (like Unsplash or Pexels) to find a relevant, high-quality image. Focus on the MAIN visual subject only - avoid complex combinations that might lead to irrelevant results.
 
-FORMAT YOUR RESPONSE AS JSON:
+SEARCH QUERY GUIDELINES:
+- Keep queries simple and focused (2-4 words maximum)
+- Focus on the primary visual subject (e.g., "pizza slice" not "New York City pizza skyline")
+- Avoid combining unrelated concepts (e.g., don't mix "pizza" with "skyline")
+- Use descriptive but common terms (e.g., "fresh pizza" not "artisanal Neapolitan pizza")
+- Prefer specific nouns over abstract concepts
+
+IMPORTANT: Return your response ONLY as a valid JSON array of objects. Each object in the array must contain exactly two keys: "location_tag" and "search_query". Do not include any other text, explanations, or markdown formatting in your response.
+
+Example of a valid JSON response:
 [
   {
-    "location": "descriptive_tag_for_location", 
-    "query": "specific search query for relevant image"
+    "location_tag": "understanding_user_needs_visual",
+    "search_query": "market research team"
+  },
+  {
+    "location_tag": "solution_overview_illustration",
+    "search_query": "technology dashboard"
   }
 ]
 
-GUIDELINES FOR GOOD LOCATIONS:
-- Article introduction (create visual interest)
-- Between major sections (break up text)
-- To illustrate specific products or features
-- For key comparisons or demonstrations
-- For emotional impact at critical points
-
-GUIDELINES FOR GOOD SEARCH QUERIES:
-- Focus on the specific product, feature, or concept being discussed
-- Use concrete nouns and descriptive adjectives
-- Avoid generic terms like "best", "top", or "professional"
-- For products, include the product type and key features (e.g., "hardshell rolling suitcase" not just "suitcase")
-- For concepts, describe the visual scene you want (e.g., "traveler packing suitcase" not just "packing")
-
-Example for a suitcase article:
-BAD QUERIES: "best suitcase", "professional luggage photo", "top travel gear"
-GOOD QUERIES: "hardshell rolling suitcase blue", "carry-on luggage overhead compartment", "traveler packing expandable suitcase"
-
-Always return valid, properly formatted JSON. Make your image queries as specific and concrete as possible.`;
+Now, analyze the following Markdown content:
+---
+[MARKDOWN_CONTENT_HERE]
+---`;
 
     const mediaAgentPrompt = (templateData?.media_agent_prompt || DEFAULT_MEDIA_AGENT_PROMPT).trim();
     
@@ -181,8 +177,13 @@ Always return valid, properly formatted JSON. Make your image queries as specifi
     }
 
     // Use the media agent prompt from the database
-    console.log('AI PATH: Using mediaAgentPrompt (first 100 chars):', mediaAgentPrompt.slice(0, 100) + '...');
-    console.log('AI PATH: Markdown for AI analysis (first 100 chars):', markdown.slice(0, 100) + '...');
+    console.log('=== DEBUGGING MEDIA AGENT PROMPT ===');
+    console.log('Database templateData:', templateData);
+    console.log('Final mediaAgentPrompt being used:');
+    console.log(mediaAgentPrompt);
+    console.log('=====================================');
+    
+    console.log('AI PATH: Markdown for AI analysis (first 200 chars):', markdown.slice(0, 200) + '...');
     const completion = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -220,21 +221,33 @@ Always return valid, properly formatted JSON. Make your image queries as specifi
 
     const data = await completion.json();
     const suggestionsText = data.choices[0].message.content;
-    console.log('AI PATH: Raw AI response for image suggestions:', suggestionsText);
+    console.log('=== RAW AI RESPONSE ===');
+    console.log('Full AI response:');
+    console.log(suggestionsText);
+    console.log('=====================');
 
     // Parse the LLM output (expecting a JSON array)
     let imageSpots: { location: string, query: string }[] = [];
     try {
       // First try to parse as JSON
       const jsonResult = JSON.parse(suggestionsText);
-      console.log('AI PATH: Parsed AI response (raw from OpenAI):', jsonResult);
+      console.log('=== PARSED JSON RESULT ===');
+      console.log('Parsed JSON from AI:', JSON.stringify(jsonResult, null, 2));
+      console.log('========================');
       
       // Handle array format
       if (Array.isArray(jsonResult)) {
         imageSpots = jsonResult.map((spotData, idx) => {
-          // The AI might return "search_query" and "location_tag" (seen in logs)
-          // or "query" and "location" (as requested in the default system prompt).
+          // The database prompt uses "search_query" and "location_tag"
           const actualQuery = spotData.search_query || spotData.query;
+          const actualLocation = spotData.location_tag || spotData.location || `spot_${idx + 1}`;
+          
+          console.log(`Processing spot ${idx + 1}:`, {
+            original: spotData,
+            extractedQuery: actualQuery,
+            extractedLocation: actualLocation
+          });
+          
           return {
             location: `spot_${idx + 1}`, // Standardized location name for frontend
             query: (actualQuery || title || 'task management').trim()
@@ -259,7 +272,9 @@ Always return valid, properly formatted JSON. Make your image queries as specifi
         console.warn('AI PATH: AI response was not a JSON array or recognized object. Will rely on later fallbacks if imageSpots remains empty.');
       }
 
-      console.log('AI PATH: Image spots after JSON parsing attempt:', imageSpots);
+      console.log('=== FINAL IMAGE SPOTS ===');
+      console.log('Image spots after JSON parsing:', JSON.stringify(imageSpots, null, 2));
+      console.log('========================');
     } catch (e) {
       console.error('AI PATH: Failed to parse AI JSON response, or error during initial parsing. Error:', e);
       // Fallback: try to parse a numbered list or bullet points

@@ -67,6 +67,7 @@ const HistoryPage = () => {
       setFormData({
         id: requestData.id,
         prompt: requestData.prompt,
+        company: requestData.company || '',
         language: requestData.language,
         country: requestData.country,
         toneType: (requestData.tone_type as 'description' | 'url') || 'description',
