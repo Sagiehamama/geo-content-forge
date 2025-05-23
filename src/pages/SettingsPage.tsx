@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 const tooltipStyle = {
   display: 'inline-block',
@@ -9,6 +10,62 @@ const tooltipStyle = {
   color: '#888',
   cursor: 'pointer',
   fontSize: '1em',
+};
+
+// Validation function for user prompt template
+const validateUserPrompt = (template: string) => {
+  // Test 1: Empty template check
+  if (!template || template.trim().length === 0) {
+    return { 
+      valid: false, 
+      error: 'User prompt template cannot be empty. Please enter a valid template.' 
+    };
+  }
+
+  // Test 2: Required placeholder exists
+  if (!template.includes('${prompt}')) {
+    return { 
+      valid: false, 
+      error: 'Missing ${prompt} placeholder - content generation will fail. Please include ${prompt} in your template.' 
+    };
+  }
+
+  // Test 3: Company conditional syntax check (common error source)
+  if (template.includes('${company') && !template.includes('${company ?')) {
+    return {
+      valid: false,
+      error: 'Company variable found but missing conditional syntax. Use: ${company ? "text when company exists" : ""}'
+    };
+  }
+
+  // Test 4: Template literal syntax works
+  try {
+    const testFunction = new Function(
+      'prompt', 
+      'company', 
+      'includeFrontmatter', 
+      'includeImages', 
+      'return `' + template + '`;'
+    );
+    // Test with mock data
+    testFunction('test prompt', 'TestCorp', true, false);
+    testFunction('test prompt', '', false, true); // Test with empty company
+  } catch (error) {
+    // Make error message more user-friendly
+    let friendlyError = error.message;
+    if (friendlyError.includes('Unexpected token')) {
+      friendlyError = 'Invalid template syntax - check for unmatched brackets, quotes, or conditional statements';
+    } else if (friendlyError.includes('Unterminated')) {
+      friendlyError = 'Unclosed template expression - check for missing closing brackets }';
+    }
+    
+    return { 
+      valid: false, 
+      error: `Template syntax error: ${friendlyError}. Please check your template literal syntax and conditional statements.` 
+    };
+  }
+
+  return { valid: true };
 };
 
 // Default media agent prompt if none exists
@@ -51,15 +108,13 @@ const SettingsPage = () => {
   const [mediaAgentPrompt, setMediaAgentPrompt] = useState('');
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [buttonState, setButtonState] = useState<'save' | 'validating' | 'saved'>('save');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPrompt = async () => {
       setLoading(true);
       setError(null);
-      setSuccess(false);
       const { data, error } = await supabase
         .from('content_templates')
         .select('id, system_prompt, user_prompt, media_agent_prompt')
@@ -80,19 +135,52 @@ const SettingsPage = () => {
 
   const handleSave = async () => {
     if (!templateId) return;
-    setSaving(true);
+    
+    // Set validating state
+    setButtonState('validating');
     setError(null);
-    setSuccess(false);
+
+    // Validate user prompt template
+    const validation = validateUserPrompt(userPrompt);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      setButtonState('save');
+      return;
+    }
+
+    // If validation passes, save to database
     const { error } = await supabase
       .from('content_templates')
-      .update({ system_prompt: systemPrompt, user_prompt: userPrompt, media_agent_prompt: mediaAgentPrompt, updated_at: new Date().toISOString() })
+      .update({ 
+        system_prompt: systemPrompt, 
+        user_prompt: userPrompt, 
+        media_agent_prompt: mediaAgentPrompt, 
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', templateId);
+
     if (error) {
-      setError('Failed to save prompt template.');
+      toast.error('Failed to save prompt template.');
+      setButtonState('save');
     } else {
-      setSuccess(true);
+      // Success: show "Saved" for 2 seconds
+      setButtonState('saved');
+      toast.success('Prompt templates saved successfully!');
+      setTimeout(() => {
+        setButtonState('save');
+      }, 2000);
     }
-    setSaving(false);
+  };
+
+  const getButtonText = () => {
+    switch (buttonState) {
+      case 'validating':
+        return 'Validating...';
+      case 'saved':
+        return 'Saved';
+      default:
+        return 'Save';
+    }
   };
 
   return (
@@ -114,17 +202,17 @@ const SettingsPage = () => {
                 className="w-full min-h-[250px] border rounded-md p-2 mb-6 font-mono text-sm"
                 value={systemPrompt}
                 onChange={e => setSystemPrompt(e.target.value)}
-                disabled={saving}
+                disabled={buttonState === 'validating'}
               />
               <label className="block mb-2 font-medium">
                 Content - User Prompt Template
-                <span style={tooltipStyle} title="This is the template for the specific task given to the AI for content generation. It includes placeholders like '{prompt}' for the user's main topic/keyword, '{company}' for company/brand context, '{language}' for output language, and '{word_count}' for article length. It instructs the AI on structure, sections, and specific elements to include based on user input parameters.">ⓘ</span>
+                <span style={tooltipStyle} title="This is the template for the specific task given to the AI for content generation. It includes placeholders like '${prompt}' for the user's main topic/keyword, '${company}' for company/brand context, '${includeFrontmatter}' and '${includeImages}' for content options. It instructs the AI on structure, sections, and specific elements to include based on user input parameters.">ⓘ</span>
               </label>
               <textarea
                 className="w-full min-h-[250px] border rounded-md p-2 mb-6 font-mono text-sm"
                 value={userPrompt}
                 onChange={e => setUserPrompt(e.target.value)}
-                disabled={saving}
+                disabled={buttonState === 'validating'}
               />
               <label className="block mb-2 font-medium">
                 Media Agent - Image Search Prompt
@@ -134,12 +222,15 @@ const SettingsPage = () => {
                 className="w-full min-h-[250px] border rounded-md p-2 mb-6 font-mono text-sm"
                 value={mediaAgentPrompt}
                 onChange={e => setMediaAgentPrompt(e.target.value)}
-                disabled={saving}
+                disabled={buttonState === 'validating'}
               />
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
+              <Button 
+                onClick={handleSave} 
+                disabled={buttonState === 'validating'}
+                className={buttonState === 'saved' ? 'bg-green-600 hover:bg-green-700' : ''}
+              >
+                {getButtonText()}
               </Button>
-              {success && <div className="text-green-600 mt-2">Prompt updated successfully!</div>}
               {error && <div className="text-red-600 mt-2">{error}</div>}
             </>
           )}
