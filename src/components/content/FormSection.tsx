@@ -67,17 +67,22 @@ const FormSection = () => {
     setLocalFormData({ ...localFormData, wordCount: value[0] });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setLocalFormData({ ...localFormData, mediaFile: file });
+  const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setLocalFormData({ ...localFormData, mediaFiles: files });
     
-    if (file) {
-      toast.success(`File "${file.name}" selected`);
+    if (files.length > 0) {
+      toast.success(`${files.length} file${files.length > 1 ? 's' : ''} selected`);
     }
   };
 
-  const handleClearFile = () => {
-    setLocalFormData({...localFormData, mediaFile: null});
+  const handleRemoveFile = (index: number) => {
+    const newFiles = localFormData.mediaFiles.filter((_, i) => i !== index);
+    setLocalFormData({ ...localFormData, mediaFiles: newFiles });
+  };
+
+  const handleClearFiles = () => {
+    setLocalFormData({...localFormData, mediaFiles: []});
   };
 
   const handleMediaToggle = (mode: 'auto' | 'manual') => {
@@ -147,9 +152,6 @@ const FormSection = () => {
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle className="text-2xl gradient-heading">Create Content</CardTitle>
-          <CardDescription>
-            Configure the parameters for your AI-generated content
-          </CardDescription>
         </div>
         <Button 
           variant="outline" 
@@ -215,10 +217,11 @@ const FormSection = () => {
           {/* AI Media */}
           <MediaField
             mediaMode={localFormData.mediaMode}
-            mediaFile={localFormData.mediaFile}
+            mediaFiles={localFormData.mediaFiles}
             onToggle={handleMediaToggle}
-            onFileChange={handleFileChange}
-            onClearFile={handleClearFile}
+            onFilesChange={handleFilesChange}
+            onRemoveFile={handleRemoveFile}
+            onClearFiles={handleClearFiles}
           />
           
           {/* Word Count */}

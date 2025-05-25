@@ -3,22 +3,24 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Upload } from "lucide-react";
+import { Upload, X } from "lucide-react";
 
 interface MediaFieldProps {
   mediaMode: 'auto' | 'manual';
-  mediaFile: File | null;
+  mediaFiles: File[];
   onToggle: (mode: 'auto' | 'manual') => void;
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onClearFile: () => void;
+  onFilesChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemoveFile: (index: number) => void;
+  onClearFiles: () => void;
 }
 
 export const MediaField: React.FC<MediaFieldProps> = ({
   mediaMode,
-  mediaFile,
+  mediaFiles,
   onToggle,
-  onFileChange,
-  onClearFile
+  onFilesChange,
+  onRemoveFile,
+  onClearFiles
 }) => {
   return (
     <div className="space-y-4">
@@ -37,37 +39,62 @@ export const MediaField: React.FC<MediaFieldProps> = ({
       </div>
       {mediaMode === 'manual' && (
         <div className="space-y-2 pt-2">
-          <Label htmlFor="mediaFile">Upload Media</Label>
+          <Label htmlFor="mediaFiles">Upload Media</Label>
           <div className="flex items-center gap-2">
             <Input
-              id="mediaFile"
+              id="mediaFiles"
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
-              onChange={onFileChange}
+              onChange={onFilesChange}
             />
             <Button 
               type="button" 
               variant="outline" 
               className="w-full flex items-center justify-center gap-2"
-              onClick={() => document.getElementById('mediaFile')?.click()}
+              onClick={() => document.getElementById('mediaFiles')?.click()}
             >
               <Upload className="h-4 w-4" />
-              {mediaFile ? mediaFile.name : "Choose file..."}
+              {mediaFiles.length === 0 ? "Choose files..." : 
+               mediaFiles.length === 1 ? "1 file selected" :
+               `${mediaFiles.length} files selected`}
             </Button>
-            {mediaFile && (
+            {mediaFiles.length > 0 && (
               <Button 
                 type="button" 
                 variant="ghost" 
                 size="sm"
-                onClick={onClearFile}
+                onClick={onClearFiles}
               >
-                Clear
+                Clear All
               </Button>
             )}
           </div>
+          
+          {/* Show selected files */}
+          {mediaFiles.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <Label className="text-sm">Selected files:</Label>
+              {mediaFiles.map((file, index) => (
+                <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
+                  <span className="text-sm truncate">{file.name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRemoveFile(index)}
+                    className="h-6 w-6 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          
           <p className="text-sm text-muted-foreground">
-            Upload your own images to use in the generated content.
+            Upload your own images to use in the generated content. You can select multiple files.
           </p>
         </div>
       )}

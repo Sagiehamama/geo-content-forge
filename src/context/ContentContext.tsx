@@ -27,7 +27,7 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
   const [finalImages, setFinalImages] = useState<ContentImage[]>([]);
   const [isSavingContent, setIsSavingContent] = useState(false);
 
-  // Initialize state from localStorage on mount
+  // Initialize state from localStorage on mount (without files)
   useEffect(() => {
     const storedFormData = localStorage.getItem('contentFormData');
     const storedContent = localStorage.getItem('generatedContent');
@@ -35,7 +35,10 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
     const storedFinalImages = localStorage.getItem('finalImages');
 
     if (storedFormData) {
-      setFormData(JSON.parse(storedFormData));
+      const parsedFormData = JSON.parse(storedFormData);
+      // Always initialize mediaFiles as empty array since we can't store files
+      parsedFormData.mediaFiles = [];
+      setFormData(parsedFormData);
     }
     if (storedContent) {
       const parsedContent = JSON.parse(storedContent);
@@ -53,11 +56,15 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // Update localStorage when state changes
+  // Update localStorage when state changes (without files)
   useEffect(() => {
     if (formData) {
-      localStorage.setItem('contentFormData', JSON.stringify(formData));
+      const formDataToStore = { ...formData };
+      // Don't store files in localStorage - just clear them
+      delete (formDataToStore as any).mediaFiles;
+      localStorage.setItem('contentFormData', JSON.stringify(formDataToStore));
     }
+    
     // Store generatedContent along with its finalImages sub-array
     if (generatedContent) {
       const contentToStore = {

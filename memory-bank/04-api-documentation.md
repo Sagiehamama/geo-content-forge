@@ -103,6 +103,46 @@
 **Endpoint**: `POST /functions/v1/media-agent`
 **Purpose**: Image search and visual content suggestions
 
+**Query Simplification**: Edge function includes mapping logic to convert complex queries to simple 1-3 word terms for optimal Unsplash API results
+- Complex: "Geneva to Chamonix scenic route" → Simple: "mountains"
+- Complex: "local restaurant reviews" → Simple: "restaurant"
+
+**Manual Upload Mode**: When users upload their own images, the system bypasses the media-agent service
+- Frontend converts uploaded files to MediaImageSpot objects using URL.createObjectURL
+- Manual mode detected via `manualMedia: true` flag in form data
+- Supports multiple file uploads with individual file management
+
+**Request (Automatic Mode)**:
+```json
+{
+  "topics": [
+    { "title": "Geneva Travel Guide", "search_queries": ["geneva attractions", "swiss travel"] }
+  ]
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "media_spots": [
+    {
+      "id": "spot_1",
+      "query": "geneva",
+      "images": [
+        {
+          "id": "image_1",
+          "url": "https://images.unsplash.com/...",
+          "description": "Beautiful view of Geneva",
+          "photographer": "John Doe",
+          "unsplash_url": "https://unsplash.com/..."
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## Database API
 
 ### Research Insights

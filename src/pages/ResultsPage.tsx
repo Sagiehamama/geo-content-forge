@@ -134,6 +134,65 @@ const ResultsPage = () => {
     }
     
     if (contextContent && contextContent.content && contextMediaSpots.length === 0) {
+      // Check if we're in manual mode with uploaded files
+      if (contextFormData?.mediaMode === 'manual' && contextFormData?.mediaFiles && contextFormData.mediaFiles.length > 0) {
+        console.log('Manual mode detected with uploaded files:', contextFormData.mediaFiles.length);
+        setMediaLoading(true);
+        setMediaError(null);
+        
+        // Convert uploaded files to media spots
+        const convertFilesToMediaSpots = async () => {
+          try {
+            const options: MediaImageOption[] = [];
+            
+            // Convert all uploaded files to options
+            for (let i = 0; i < contextFormData.mediaFiles.length; i++) {
+              const file = contextFormData.mediaFiles[i];
+              
+              // Create object URL for the file to display it
+              const imageUrl = URL.createObjectURL(file);
+              
+              options.push({
+                url: imageUrl,
+                alt: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension for alt text
+                caption: `User uploaded: ${file.name}`,
+                source: 'User Upload'
+              });
+            }
+            
+            // CRITICAL FIX: Parse semantic markers from content to determine spot count
+            const semanticMarkers = contextContent.content.match(/\[IMAGE:([^\]]+)\]/g) || [];
+            const spotsNeeded = semanticMarkers.length;
+            
+            console.log(`Manual mode: Found ${semanticMarkers.length} semantic markers in content`);
+            console.log('Semantic markers:', semanticMarkers);
+            
+            // Create spots to match the semantic markers in the content
+            const spots: MediaImageSpot[] = [];
+            
+            for (let i = 0; i < spotsNeeded; i++) {
+              spots.push({
+                location: `spot_${i + 1}`,
+                options: [...options] // Each spot gets all uploaded images as options
+              });
+            }
+            
+            console.log('Created media spots from uploaded files:', spots);
+            console.log(`Created ${spots.length} spots to match ${spotsNeeded} semantic markers, each with ${options.length} options`);
+            setMediaSpots(spots);
+          } catch (err) {
+            console.error('Error converting files to media spots:', err);
+            setMediaError('Failed to process uploaded files');
+          } finally {
+            setMediaLoading(false);
+          }
+        };
+        
+        convertFilesToMediaSpots();
+        return;
+      }
+      
+      // Otherwise, proceed with automatic media suggestions
       setMediaLoading(true);
       setMediaError(null);
       console.log(`[${new Date().toISOString()}] Frontend: Calling getMediaSuggestions`);
@@ -145,7 +204,7 @@ const ResultsPage = () => {
             // Create a default spot if none were found
             spots = [
               {
-                location: 'default_spot',
+                location: 'spot_1',
                 options: [{
                   url: PLACEHOLDER_IMAGE,
                   alt: 'Default image placeholder',
@@ -155,6 +214,13 @@ const ResultsPage = () => {
               }
             ];
             console.log('Created default media spot since none were found');
+          } else {
+            // Ensure automated spots use standardized naming for consistency
+            spots = spots.map((spot, index) => ({
+              ...spot,
+              location: `spot_${index + 1}` // Standardize to spot_1, spot_2, spot_3
+            }));
+            console.log('Standardized automated spot locations:', spots.map(s => s.location));
           }
           setMediaSpots(spots);
         })
@@ -164,7 +230,7 @@ const ResultsPage = () => {
         })
         .finally(() => setMediaLoading(false));
     }
-  }, [contextContent, mediaRetryCount, contextMediaSpots, setMediaSpots, useCustomDescription]);
+  }, [contextContent, mediaRetryCount, contextMediaSpots, setMediaSpots, useCustomDescription, contextFormData]);
   
   const handleCopyContent = () => {
     if (contextContent) {
@@ -242,24 +308,36 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
   
   // Handler for selecting an image (takes full MediaImageOption or null)
   const handleSelectImage = (imageOption: MediaImageOption | null) => {
-    if (!selectedSpot) return;
+    console.log('handleSelectImage called with:', { selectedSpot, imageOption });
     
+    if (!selectedSpot) {
+      console.log('No selectedSpot, returning early');
+      return;
+    }
+    
+    console.log('Calling updateFinalImage with:', selectedSpot, imageOption);
     updateFinalImage(selectedSpot, imageOption);
+    
+    console.log('Current finalImages after update:', contextFinalImages);
     
     // Close the dialog after selecting
     setTimeout(() => setSelectedSpot(null), 300);
     
     if (imageOption && imageOption.url) {
       toast.success(`Image selected for ${selectedSpot.replace(/_/g, ' ')}`);
+      console.log(`Image selected for ${selectedSpot}`);
     } else {
       toast.info(`Image removed for ${selectedSpot.replace(/_/g, ' ')}`);
+      console.log(`Image removed for ${selectedSpot}`);
     }
   };
   
   // Helper to get the selected image URL or placeholder
   const getImageForSpot = (location: string): string => {
     const finalImage = contextFinalImages.find(img => img.location === location);
-    return finalImage?.url || PLACEHOLDER_IMAGE;
+    const imageUrl = finalImage?.url || PLACEHOLDER_IMAGE;
+    console.log(`getImageForSpot(${location}): finalImage =`, finalImage, 'returning:', imageUrl);
+    return imageUrl;
   };
   
   // Handler for retrying content generation
@@ -343,59 +421,135 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
     processedContent = processedContent.replace(/^\s*spot\s+\d+\s*$/gmi, '');
     processedContent = processedContent.replace(/\n\s*spot\s+\d+\s*\n/gi, '\n\n');
     
-    // Replace with actual image markdown for better rendering
-    if (contextMediaSpots.length > 0) {
-      // First, convert any standalone "spot X" text to image markdown
-      for (let i = 0; i < contextMediaSpots.length; i++) {
-        const spotNumber = i + 1;
-        const spot = contextMediaSpots[i];
-        const regex = new RegExp(`\\bspot\\s*${spotNumber}\\b`, 'gi');
-        
-        const imageUrl = getImageForSpot(spot.location);
-        const imgMarkdown = `![Image ${spotNumber}](${imageUrl})`;
-        
-        processedContent = processedContent.replace(regex, imgMarkdown);
-      }
+    console.log('=== MARKDOWN GENERATION DEBUG ===');
+    console.log('Initial processed content (first 200 chars):', processedContent.substring(0, 200));
+    console.log('Media spots:', contextMediaSpots);
+    console.log('Final images:', contextFinalImages);
+    
+    // PHASE 1: Check for semantic [IMAGE:description] markers first
+    const semanticMarkers = processedContent.match(/\[IMAGE:([^\]]+)\]/g);
+    
+    if (semanticMarkers && semanticMarkers.length > 0) {
+      console.log('=== SEMANTIC MARKERS FOUND ===');
+      console.log('Found semantic markers:', semanticMarkers);
       
-      // Look for explicit [IMAGE:location] tags and replace them
-      contextMediaSpots.forEach(spot => {
-        const locationTag = `[IMAGE:${spot.location}]`;
-        if (processedContent.includes(locationTag)) {
-          const imageUrl = getImageForSpot(spot.location);
-          const altText = spot.options.find(opt => opt.url === imageUrl)?.alt || spot.location.replace(/_/g, ' ');
-          const replacementHtml = `![${altText}](${imageUrl})`;
-          processedContent = processedContent.replace(locationTag, replacementHtml);
+      // Process semantic markers with proper spot mapping
+      semanticMarkers.forEach((marker, index) => {
+        const spotLocation = `spot_${index + 1}`;
+        const imageDescription = marker.match(/\[IMAGE:([^\]]+)\]/)?.[1] || '';
+        
+        console.log(`Processing semantic marker ${index + 1}: ${marker} -> ${spotLocation}`);
+        
+        // Find corresponding image for this spot
+        const finalImage = contextFinalImages.find(img => img.location === spotLocation);
+        
+        let replacement;
+        if (finalImage) {
+          // Use selected image
+          replacement = `![${finalImage.alt}](${finalImage.url})`;
+          console.log(`Replacing ${marker} with selected image: ${replacement}`);
+        } else {
+          // Use placeholder with spot-specific fragment for click tracking
+          replacement = `![${imageDescription}](${PLACEHOLDER_IMAGE}#${spotLocation})`;
+          console.log(`Replacing ${marker} with placeholder: ${replacement}`);
         }
+        
+        // Replace the semantic marker with image markdown
+        processedContent = processedContent.replace(marker, replacement);
       });
       
-      // If no images found at all, inject placeholders at logical spots
-      if (!processedContent.includes('![')) {
-        const paragraphs = processedContent.split('\n\n');
-        const totalParagraphs = paragraphs.length;
+      console.log('=== SEMANTIC PROCESSING COMPLETE ===');
+    } else {
+      console.log('=== NO SEMANTIC MARKERS - USING MATHEMATICAL POSITIONING ===');
+      
+      // PHASE 2: Fall back to mathematical positioning for legacy content
+      if (contextMediaSpots.length > 0) {
+        // First, convert any standalone "spot X" text to image markdown
+        for (let i = 0; i < contextMediaSpots.length; i++) {
+          const spotNumber = i + 1;
+          const spot = contextMediaSpots[i];
+          const regex = new RegExp(`\\bspot\\s*${spotNumber}\\b`, 'gi');
+          
+          const imageUrl = getImageForSpot(spot.location);
+          const imgMarkdown = `![Image ${spotNumber}](${imageUrl})`;
+          
+          console.log(`Processing spot ${spotNumber}: regex=${regex}, imageUrl=${imageUrl}`);
+          processedContent = processedContent.replace(regex, imgMarkdown);
+        }
         
-        // Calculate optimal image positions based on content length
-        const imagePositions = contextMediaSpots.map((_, idx) => {
-          // Distribute images evenly throughout the content
-          return Math.floor((totalParagraphs / (contextMediaSpots.length + 1)) * (idx + 1));
-        });
-        
-        // Insert images at calculated positions
-        imagePositions.forEach((position, idx) => {
-          if (position < paragraphs.length) {
-            const spot = contextMediaSpots[idx];
+        // Look for explicit [IMAGE:location] tags and replace them
+        contextMediaSpots.forEach(spot => {
+          const locationTag = `[IMAGE:${spot.location}]`;
+          if (processedContent.includes(locationTag)) {
             const imageUrl = getImageForSpot(spot.location);
             const altText = spot.options.find(opt => opt.url === imageUrl)?.alt || spot.location.replace(/_/g, ' ');
-            const imgMarkdown = `![${altText}](${imageUrl})`;
-            
-            // Insert after the paragraph at the calculated position
-            paragraphs.splice(position, 0, imgMarkdown);
+            const replacementHtml = `![${altText}](${imageUrl})`;
+            console.log(`Replacing ${locationTag} with ${replacementHtml}`);
+            processedContent = processedContent.replace(locationTag, replacementHtml);
           }
         });
         
-        // Join everything back together
-        processedContent = paragraphs.join('\n\n');
+        // If no images found at all, inject placeholders at logical spots
+        // But each placeholder should be specifically tied to a spot
+        if (!processedContent.includes('![')) {
+          console.log('No images found in content, injecting placeholders with specific spot markers');
+          const paragraphs = processedContent.split('\n\n');
+          const totalParagraphs = paragraphs.length;
+          
+          // Calculate optimal image positions based on content length
+          const imagePositions = contextMediaSpots.map((_, idx) => {
+            // Distribute images evenly throughout the content
+            return Math.floor((totalParagraphs / (contextMediaSpots.length + 1)) * (idx + 1));
+          });
+          
+          console.log('Image positions calculated:', imagePositions);
+          
+          // Insert spot-specific placeholders at calculated positions
+          imagePositions.forEach((position, idx) => {
+            if (position < paragraphs.length) {
+              const spot = contextMediaSpots[idx];
+              
+              // Check if this spot has a selected image
+              const finalImage = contextFinalImages.find(img => img.location === spot.location);
+              
+              let imgMarkdown;
+              if (finalImage) {
+                // Use the selected image
+                imgMarkdown = `![${finalImage.alt}](${finalImage.url})`;
+                console.log(`Inserting selected image at position ${position}: ${imgMarkdown}`);
+              } else {
+                // Use placeholder with spot-specific ID so we can track clicks
+                imgMarkdown = `![${spot.location.replace(/_/g, ' ')}](${PLACEHOLDER_IMAGE}#${spot.location})`;
+                console.log(`Inserting placeholder at position ${position}: ${imgMarkdown}`);
+              }
+              
+              // Insert after the paragraph at the calculated position
+              paragraphs.splice(position, 0, imgMarkdown);
+            }
+          });
+          
+          // Join everything back together
+          processedContent = paragraphs.join('\n\n');
+        }
       }
     }
+    
+    console.log('Final processed content (first 500 chars):', processedContent.substring(0, 500));
+    
+    // Also show content around image insertions for debugging
+    const imageMarkdownPattern = /!\[.*?\]\(.*?\)/g;
+    const imageMatches = Array.from(processedContent.matchAll(imageMarkdownPattern));
+    console.log('Found image markdown in final content:', imageMatches.map(match => match[0]));
+    
+    // Show content around first image insertion
+    if (imageMatches.length > 0) {
+      const firstImageIndex = imageMatches[0].index || 0;
+      const start = Math.max(0, firstImageIndex - 100);
+      const end = Math.min(processedContent.length, firstImageIndex + 200);
+      console.log('Content around first image insertion:', processedContent.substring(start, end));
+    }
+    
+    console.log('=== END MARKDOWN DEBUG ===');
     
     return processedContent;
   };
@@ -408,24 +562,25 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       return;
     }
     
-    console.log(`Image clicked with src: ${src.substring(0, 30)}...`);
+    console.log(`Image clicked with src: ${src.substring(0, 50)}...`);
     console.log('Available media spots:', contextMediaSpots.map(s => s.location));
     
-    // First try to match by the image src
+    // Check if the URL has a spot fragment (e.g., "/placeholder-select.png#spot_1")
+    if (src.includes('#')) {
+      const spotId = src.split('#')[1];
+      const matchedSpot = contextMediaSpots.find(s => s.location === spotId);
+      if (matchedSpot) {
+        console.log(`Found spot from URL fragment: ${spotId}`);
+        setSelectedSpot(spotId);
+        return;
+      }
+    }
+    
+    // First try to match by the image src (for already selected images)
     let matchedSpot = contextMediaSpots.find(spot => {
       const finalImage = contextFinalImages.find(img => img.location === spot.location);
       return finalImage?.url === src;
     });
-    
-    // If no match and it's a placeholder, try to find a matching spot from the image URL
-    if (!matchedSpot) {
-      // Look for spot_X pattern in the src
-      const spotMatch = src.match(/spot[_\s]?(\d+)/i);
-      if (spotMatch) {
-        const spotNumber = spotMatch[1];
-        matchedSpot = contextMediaSpots.find(s => s.location === `spot_${spotNumber}`);
-      }
-    }
     
     // If we found a matching spot, open the image selection dialog
     if (matchedSpot) {
@@ -523,41 +678,93 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                         <div className="bg-white rounded-md border p-6 prose prose-slate prose-headings:font-bold prose-headings:text-slate-900 prose-p:text-slate-700 prose-img:rounded-lg max-w-none">
                           {contextContent && (
                             <ReactMarkdown
+                              key={`content-${contextFinalImages.length}-${contextFinalImages.map(img => img.location).join('-')}`}
+                              urlTransform={(uri) => {
+                                // Critical: Allow blob URLs to pass through without sanitization
+                                console.log('🔍 urlTransform called with:', uri);
+                                if (uri.startsWith('blob:') || uri.startsWith('data:')) {
+                                  console.log('✅ Allowing blob/data URL:', uri);
+                                  return uri;
+                                }
+                                if (uri.startsWith('http:') || uri.startsWith('https:')) {
+                                  console.log('✅ Allowing HTTP URL:', uri);
+                                  return uri;
+                                }
+                                console.log('✅ Allowing other URL:', uri);
+                                return uri;
+                              }}
                               components={{
                                 a: ({ node, ...props }) => (
                                   <a {...props} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" />
                                 ),
                                 img: ({ node, ...props }) => {
-                                  // Determine if this is a placeholder image
-                                  const isPlaceholder = props.src === PLACEHOLDER_IMAGE || !props.src;
+                                  console.log('=== IMG COMPONENT DEBUG ===');
+                                  console.log('props.src:', props.src);
+                                  console.log('props.alt:', props.alt);
                                   
+                                  // Determine if this is a placeholder image (handle fragment URLs)
+                                  const srcWithoutFragment = props.src?.split('#')[0];
+                                  const isPlaceholder = srcWithoutFragment === PLACEHOLDER_IMAGE || !props.src;
+                                  
+                                  console.log('srcWithoutFragment:', srcWithoutFragment);
+                                  console.log('PLACEHOLDER_IMAGE:', PLACEHOLDER_IMAGE);
+                                  console.log('isPlaceholder:', isPlaceholder);
+                                  
+                                  // Check if it's a blob URL
+                                  const isBlobUrl = props.src?.startsWith('blob:');
+                                  console.log('isBlobUrl:', isBlobUrl);
+                                  
+                                  if (isBlobUrl) {
+                                    console.log('🔍 BLOB URL DETECTED:', props.src);
+                                    // Test if blob URL is still valid
+                                    fetch(props.src)
+                                      .then(response => {
+                                        console.log('✅ Blob URL fetch success:', response.status, response.ok);
+                                        return response.blob();
+                                      })
+                                      .then(blob => {
+                                        console.log('✅ Blob content:', blob.size, 'bytes', blob.type);
+                                      })
+                                      .catch(error => {
+                                        console.error('❌ Blob URL fetch failed:', error);
+                                      });
+                                  }
+
                                   // Try to find the spot this image represents.
                                   // This logic can be complex if props.src is already a final URL.
                                   let spotLocationToOpenDialogFor: string | undefined = undefined;
 
-                                  // Attempt to find a spot whose currently selected image URL matches props.src
-                                  const spotMatchingSelectedImage = contextFinalImages.find(fi => fi.url === props.src);
-                                  if (spotMatchingSelectedImage) {
-                                    spotLocationToOpenDialogFor = spotMatchingSelectedImage.location;
+                                  // Check if the URL has a spot fragment (e.g., "/placeholder-select.png#spot_1")
+                                  if (props.src?.includes('#')) {
+                                    const spotId = props.src.split('#')[1];
+                                    const matchedSpot = contextMediaSpots.find(s => s.location === spotId);
+                                    if (matchedSpot) {
+                                      spotLocationToOpenDialogFor = spotId;
+                                    }
                                   } else {
-                                    // Fallback: if it's a generic placeholder, or alt text hints at a spot
-                                    // This part might need refinement based on how placeholders are rendered initially
-                                    const spotFromAlt = contextMediaSpots.find(s => props.alt?.includes(s.location) || props.alt?.includes(s.location.replace(/_/g, ' ')));
-                                    if (spotFromAlt) {
-                                      spotLocationToOpenDialogFor = spotFromAlt.location;
+                                    // Attempt to find a spot whose currently selected image URL matches props.src
+                                    const spotMatchingSelectedImage = contextFinalImages.find(fi => fi.url === props.src);
+                                    if (spotMatchingSelectedImage) {
+                                      spotLocationToOpenDialogFor = spotMatchingSelectedImage.location;
                                     } else {
+                                      // Fallback: if it's a generic placeholder, or alt text hints at a spot
+                                      const spotFromAlt = contextMediaSpots.find(s => props.alt?.includes(s.location) || props.alt?.includes(s.location.replace(/_/g, ' ')));
+                                      if (spotFromAlt) {
+                                        spotLocationToOpenDialogFor = spotFromAlt.location;
+                                      } else {
                                         // If it's a known placeholder image, try to derive spot from context
-                                        // This relies on images being rendered in a somewhat predictable order initially
-                                        // Or having specific alt tags from getContentWithImagePlaceholders()
                                         const imagesInPreview = Array.from(document.querySelectorAll('.prose img'));
                                         const clickedImageIndex = imagesInPreview.findIndex(img => img.getAttribute('src') === props.src);
                                         if (clickedImageIndex !== -1 && clickedImageIndex < contextMediaSpots.length) {
                                            spotLocationToOpenDialogFor = contextMediaSpots[clickedImageIndex].location;
                                         }
+                                      }
                                     }
                                   }
                                   
                                   const displaySrc = props.src || PLACEHOLDER_IMAGE;
+                                  console.log('Final displaySrc:', displaySrc);
+                                  console.log('=== END IMG COMPONENT DEBUG ===');
                                   
                                   return (
                                     <img 
@@ -566,12 +773,23 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                       alt={props.alt || (spotLocationToOpenDialogFor ? spotLocationToOpenDialogFor.replace(/_/g, ' ') : 'Content image')}
                                       className={`rounded-md max-w-full h-auto my-4 cursor-pointer hover:ring-2 hover:ring-primary transition-all ${isPlaceholder ? 'border-2 border-dashed border-blue-300' : ''}`} 
                                       loading="lazy" 
+                                      onLoad={() => {
+                                        if (isBlobUrl) {
+                                          console.log('✅ Blob image loaded successfully:', props.src);
+                                        }
+                                      }}
+                                      onError={(e) => {
+                                        console.error('❌ Image failed to load:', props.src);
+                                        console.error('Error event:', e);
+                                        if (isBlobUrl) {
+                                          console.error('❌ BLOB URL FAILED TO LOAD');
+                                        }
+                                      }}
                                       onClick={() => {
                                         if (spotLocationToOpenDialogFor) {
                                           setSelectedSpot(spotLocationToOpenDialogFor);
                                         } else if (contextMediaSpots.length > 0) {
                                           // Fallback: if no specific spot found, open for the first one.
-                                          // This might happen if an image is somehow rendered without a clear spot association.
                                           setSelectedSpot(contextMediaSpots[0].location);
                                           console.warn("Could not determine specific spot for image click, defaulting to first spot.");
                                         } else {
@@ -579,7 +797,6 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                         }
                                       }}
                                       style={isPlaceholder ? { 
-                                        position: 'relative',
                                         borderWidth: '2px',
                                         borderStyle: 'dashed',
                                         borderColor: '#93c5fd',
@@ -587,10 +804,14 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                         maxHeight: '150px',
                                         width: '50%',
                                         margin: '0 auto',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                      } : undefined}
+                                        display: 'block',
+                                        objectFit: 'cover',
+                                        backgroundColor: '#f8fafc'
+                                      } : {
+                                        maxWidth: '100%',
+                                        height: 'auto',
+                                        display: 'block'
+                                      }}
                                       title={isPlaceholder ? "Click to select an image" : props.alt}
                                     />
                                   );

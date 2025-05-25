@@ -12,25 +12,7 @@ export const ContentOptionsField: React.FC<ContentOptionsFieldProps> = ({
   includeFrontmatter,
   onSwitchChange
 }) => {
-  return (
-    <div className="space-y-4">
-      <Label className="text-base">Content Features</Label>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <FileJson className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Generate YAML frontmatter</span>
-          </div>
-          <Switch
-            id="includeFrontmatter"
-            checked={includeFrontmatter}
-            onCheckedChange={(checked) => onSwitchChange('includeFrontmatter', checked)}
-          />
-        </div>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        YAML frontmatter includes metadata like title, description, tags, and publish date.
-      </p>
-    </div>
-  );
+  // This component no longer renders anything as frontmatter is always enabled
+  // The includeFrontmatter prop is still used internally but not shown in UI
+  return null;
 };

@@ -215,11 +215,6 @@ export const CompanyField: React.FC<CompanyFieldProps> = ({ value = '', onChange
           </div>
         </div>
       )}
-
-      <p className="text-sm text-muted-foreground">
-        Optional: Provide context about the company or brand you want to highlight in the content. 
-        This helps create more targeted, brand-aware articles that improve visibility in generative search results.
-      </p>
     </div>
   );
 }; 

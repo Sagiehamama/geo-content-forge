@@ -10,7 +10,7 @@ export interface FormData {
   toneUrl: string;
   toneType: 'description' | 'url';
   mediaMode: 'auto' | 'manual';
-  mediaFile: File | null;
+  mediaFiles: File[];
   wordCount: number;
   includeFrontmatter: boolean;
   includeImages?: boolean;
@@ -28,12 +28,12 @@ export const initialFormData: FormData = {
   toneUrl: '',
   toneType: 'description',
   mediaMode: 'auto',
-  mediaFile: null,
+  mediaFiles: [],
   wordCount: 1000,
   includeFrontmatter: true,
   includeImages: false,
   // Research Agent defaults
-  enableResearch: false,
+  enableResearch: true,
   researchQuery: '',
 };
 

@@ -137,34 +137,57 @@ serve(async (req) => {
   }
 
   try {
-    const { markdown, title, customDescription } = await req.json();
-    // Log every incoming request
-    console.log(`[${new Date().toISOString()}] media-agent request:`, title || markdown?.slice(0, 40), 'Custom Desc Value:', customDescription);
-    
-    if (!markdown && !customDescription) {
+    const body = await req.json();
+    const { markdown, title } = body;
+
+    if (!markdown) {
       return new Response(
-        JSON.stringify({ error: 'Missing markdown content (and no custom description)' }),
+        JSON.stringify({ error: 'Missing markdown content' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    // If we have a custom description, use it directly
-    if (customDescription) {
-      console.log('CUSTOM PATH: Using custom description received from frontend:', customDescription);
-      const images = [{
-        location: 'spot_1',
-        options: await searchImages(customDescription)
-      }];
-      console.log('CUSTOM PATH: Images from custom search (first 500 chars):', JSON.stringify(images, null, 2).slice(0, 500));
+    console.log('Media Agent called with title:', title);
+    console.log('Markdown length:', markdown.length);
 
+    // PHASE 1: Check for semantic image markers first
+    const semanticMarkers = extractSemanticImageMarkers(markdown);
+    
+    if (semanticMarkers.length > 0) {
+      console.log('=== SEMANTIC MARKERS FOUND ===');
+      console.log('Found semantic image markers:', semanticMarkers);
+      console.log('=============================');
+      
+      // Process semantic markers directly
+      const images: { location: string; options: Awaited<ReturnType<typeof searchImages>> }[] = [];
+      
+      for (let i = 0; i < semanticMarkers.length; i++) {
+        const marker = semanticMarkers[i];
+        const location = `spot_${i + 1}`;
+        console.log(`SEMANTIC PATH: Processing marker ${i + 1} - "${marker.description}"`);
+        
+        // Simplify the description for better Unsplash results
+        const simplifiedQuery = simplifySearchQuery(marker.description);
+        console.log(`SEMANTIC PATH: Simplified query: "${simplifiedQuery}"`);
+        
+        const options = await searchImages(simplifiedQuery);
+        images.push({
+          location,
+          options
+        });
+      }
+      
       return new Response(
         JSON.stringify({ images }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Otherwise, proceed with AI-generated suggestions
-    console.log('AI PATH: No custom description, proceeding with AI suggestions.');
+    // PHASE 2: Fall back to AI analysis if no semantic markers
+    console.log('=== NO SEMANTIC MARKERS FOUND ===');
+    console.log('Falling back to AI content analysis');
+    console.log('================================');
+
     // Fetch the media agent prompt from the DB
     const { data: templateData, error: templateError } = await supabase
       .from('content_templates')
@@ -364,4 +387,30 @@ Use simple 1-2 word search queries only.`;
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
-}); 
+});
+
+// New function to extract semantic image markers
+function extractSemanticImageMarkers(markdown: string): { description: string; position: number }[] {
+  const markers: { description: string; position: number }[] = [];
+  
+  // Regex to find [IMAGE:description] markers
+  const imageMarkerRegex = /\[IMAGE:([^\]]+)\]/g;
+  let match;
+  
+  while ((match = imageMarkerRegex.exec(markdown)) !== null) {
+    const description = match[1].trim();
+    const position = match.index;
+    
+    if (description) {
+      markers.push({
+        description,
+        position
+      });
+    }
+  }
+  
+  // Sort by position to maintain order
+  markers.sort((a, b) => a.position - b.position);
+  
+  return markers;
+} 

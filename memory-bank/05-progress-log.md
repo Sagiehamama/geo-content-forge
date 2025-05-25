@@ -21,6 +21,33 @@
 
 **Status**: Backend research system fully operational, ready for frontend integration
 
+### Media Agent Improvements & Manual Upload Implementation 
+
+**Image Relevance Issues Resolved**
+- ✅ **Query Simplification**: Fixed media agent returning irrelevant images due to overly complex search queries
+- ✅ **Prompt Architecture Fix**: Resolved database vs code prompt mismatch - confirmed database-driven approach
+- ✅ **Edge Function Enhancement**: Added query mapping logic to convert complex queries to simple 1-3 word terms
+- ✅ **Documentation Updates**: Updated memory bank across 4 files emphasizing database-driven prompt management
+
+**UI Cleanup Complete**
+- ✅ **Input Page Refinements**: Removed subtitle, company description text, YAML toggle (always on)
+- ✅ **Default Settings**: Made Reddit research agent default to ON state
+- ✅ **Component Updates**: Modified FormSection.tsx, CompanyField.tsx, ContentOptionsField.tsx, types.ts
+
+**Manual Media Upload System (In Progress)**
+- 🏗️ **Multiple File Support**: Updated data structure from single `mediaFile` to `mediaFiles[]` array
+- 🏗️ **Enhanced UI**: Improved MediaField component with multiple file selection and individual file removal
+- 🏗️ **Manual Mode Detection**: Started ResultsPage updates to use uploaded files instead of AI suggestions
+- 🏗️ **File Handling**: Converting uploaded files to MediaImageSpot objects using URL.createObjectURL
+
+**Technical Achievements:**
+- Media agent query simplification includes specific mappings for common complex terms
+- Database prompt architecture prevents code/database conflicts
+- Manual upload mode bypasses media-agent service for user-provided images
+- Improved error handling and fallback mechanisms for image search
+
+**Status**: Media agent relevance issues resolved, UI cleanup complete, manual upload system 70% implemented
+
 ### Previous Project Milestones
 
 **Project Foundation**
