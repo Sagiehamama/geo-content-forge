@@ -37,10 +37,12 @@
 - **Settings Tab/Page:**
   - View and edit the system prompt template for the Content Creator agent
   - **View and edit the Research Agent prompt templates**
-  - **View and edit the Media Agent prompt**
+  - **CRITICAL: View and edit the Media Agent prompt (stored in database `content_templates.media_agent_prompt`)**
+  - **Media Agent prompt controls search query generation - must be updated via Settings, NOT in code**
   - Fetches and updates the prompt templates from the `content_templates` table
   - Simple text area or code editor for editing
   - Template variable management
+  - **Media Agent prompt should emphasize simple 1-3 word search queries for Unsplash compatibility**
 
 ## Backend Components
 - **Supabase Database:** 

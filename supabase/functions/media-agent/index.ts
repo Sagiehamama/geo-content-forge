@@ -16,8 +16,61 @@ const corsHeaders = {
 
 const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/600x400?text=Image+Not+Found';
 
+// Simplify complex queries to improve Unsplash results
+function simplifySearchQuery(query: string): string {
+  // Common query simplification mappings
+  const queryMappings: Record<string, string> = {
+    // Location-specific terms -> general terms
+    'geneva to chamonix': 'mountains',
+    'chamonix': 'mountains',
+    'geneva airport': 'airport',
+    'swiss alps': 'mountains',
+    'mont blanc': 'mountains',
+    
+    // Complex transport terms -> simple ones
+    'car rental at': 'car rental',
+    'bus from': 'bus',
+    'travel from': 'travel',
+    'scenic route': 'scenic',
+    'journey to': 'travel',
+    
+    // Activity terms simplification
+    'mountain climbing in': 'climbing',
+    'hiking trails and': 'hiking',
+    'thermal spas in': 'spa',
+    'adventure seekers': 'adventure',
+  };
+  
+  const lowerQuery = query.toLowerCase().trim();
+  
+  // Check for direct mappings first
+  for (const [complex, simple] of Object.entries(queryMappings)) {
+    if (lowerQuery.includes(complex)) {
+      console.log(`Simplified query "${query}" -> "${simple}"`);
+      return simple;
+    }
+  }
+  
+  // If no mapping found, extract key terms (max 2 words)
+  const words = lowerQuery.split(/\s+/).filter(word => 
+    word.length > 2 && 
+    !['and', 'the', 'for', 'from', 'to', 'at', 'in', 'of'].includes(word)
+  );
+  
+  if (words.length > 2) {
+    const simplified = words.slice(0, 2).join(' ');
+    console.log(`Simplified query "${query}" -> "${simplified}"`);
+    return simplified;
+  }
+  
+  return query;
+}
+
 // Real Unsplash image search API
 async function searchImages(query: string) {
+  // Simplify complex queries to improve Unsplash results
+  const simplifiedQuery = simplifySearchQuery(query);
+  
   if (!unsplashAccessKey) {
     console.warn('UNSPLASH_ACCESS_KEY not configured, using fallback images');
     return [
@@ -39,7 +92,7 @@ async function searchImages(query: string) {
   try {
     console.log('Searching Unsplash for (exact query):', query);
     const response = await fetch(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape`,
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(simplifiedQuery)}&per_page=3&orientation=landscape`,
       {
         headers: {
           'Authorization': `Client-ID ${unsplashAccessKey}`
@@ -52,7 +105,7 @@ async function searchImages(query: string) {
     }
     
     const data = await response.json();
-    console.log('Unsplash response:', data.results?.length, 'images found for query:', query);
+    console.log('Unsplash response:', data.results?.length, 'images found for query:', simplifiedQuery);
     
     if (!data.results?.length) {
       throw new Error('No images found');
@@ -61,7 +114,7 @@ async function searchImages(query: string) {
     return data.results.map(photo => ({
       url: photo.urls.regular,  // Remove the extra query params that were causing issues
       alt: photo.alt_description || query,
-      caption: photo.description || `Image for ${query}`,
+      caption: photo.description || `Image for ${query}${simplifiedQuery !== query ? ` (searched: ${simplifiedQuery})` : ''}`,
       source: `Unsplash (Photo by ${photo.user.name})`
     }));
   } catch (error) {
@@ -127,38 +180,9 @@ serve(async (req) => {
     }
 
     // Default media agent prompt if none exists
-    const DEFAULT_MEDIA_AGENT_PROMPT = `You are an AI assistant specialized in enhancing blog articles with relevant visuals.
-Your task is to analyze the provided Markdown content and identify 1 to 3 optimal locations where an image would significantly improve reader engagement and comprehension.
-
-For each identified location, you must provide:
-1.  A 'location_tag': A unique, simple, and descriptive tag for this spot, using snake_case (e.g., 'after_introduction_hook', 'key_benefit_illustration', 'how_it_works_diagram_spot'). This tag will be used as an internal identifier.
-2.  A 'search_query': A concise and effective search query (2-4 words max) that could be used with a stock photo API (like Unsplash or Pexels) to find a relevant, high-quality image. Focus on the MAIN visual subject only - avoid complex combinations that might lead to irrelevant results.
-
-SEARCH QUERY GUIDELINES:
-- Keep queries simple and focused (2-4 words maximum)
-- Focus on the primary visual subject (e.g., "pizza slice" not "New York City pizza skyline")
-- Avoid combining unrelated concepts (e.g., don't mix "pizza" with "skyline")
-- Use descriptive but common terms (e.g., "fresh pizza" not "artisanal Neapolitan pizza")
-- Prefer specific nouns over abstract concepts
-
-IMPORTANT: Return your response ONLY as a valid JSON array of objects. Each object in the array must contain exactly two keys: "location_tag" and "search_query". Do not include any other text, explanations, or markdown formatting in your response.
-
-Example of a valid JSON response:
-[
-  {
-    "location_tag": "understanding_user_needs_visual",
-    "search_query": "market research team"
-  },
-  {
-    "location_tag": "solution_overview_illustration",
-    "search_query": "technology dashboard"
-  }
-]
-
-Now, analyze the following Markdown content:
----
-[MARKDOWN_CONTENT_HERE]
----`;
+    const DEFAULT_MEDIA_AGENT_PROMPT = `You are an AI assistant for image search. Analyze the content and return 1-3 image spots as JSON:
+[{"location_tag": "spot_1", "search_query": "mountains"}]
+Use simple 1-2 word search queries only.`;
 
     const mediaAgentPrompt = (templateData?.media_agent_prompt || DEFAULT_MEDIA_AGENT_PROMPT).trim();
     
