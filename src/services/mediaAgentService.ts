@@ -16,15 +16,29 @@ export interface MediaAgentResponse {
   images: MediaImageSpot[];
   error?: string;
   code?: string;
+  conversations?: {
+    media_agent?: {
+      messages: Array<{
+        role: 'system' | 'user' | 'assistant';
+        content: string;
+        timestamp: number;
+      }>;
+      timing: { start: number; end: number; duration: number };
+      tokens?: number;
+      model: string;
+    };
+  };
 }
 
 export interface MediaAgentParams {
   markdown: string;
   title: string;
   customDescription?: string;
+  xraySessionId?: string;
+  isRefresh?: boolean;
 }
 
-export const getMediaSuggestions = async (params: MediaAgentParams): Promise<MediaImageSpot[]> => {
+export const getMediaSuggestions = async (params: MediaAgentParams): Promise<{ images: MediaImageSpot[]; conversations?: any }> => {
   try {
     const { data, error } = await supabase.functions.invoke('media-agent', {
       body: params
@@ -41,7 +55,10 @@ export const getMediaSuggestions = async (params: MediaAgentParams): Promise<Med
       throw new Error(data.error);
     }
 
-    return data.images || [];
+    return {
+      images: data.images || [],
+      conversations: data.conversations
+    };
   } catch (error: any) {
     console.error('Error in getMediaSuggestions:', error);
     throw error;

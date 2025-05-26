@@ -7,6 +7,7 @@ import AppLayout from "./components/layout/AppLayout";
 import HomePage from "./pages/HomePage";
 import ResultsPage from "./pages/ResultsPage";
 import HistoryPage from "./pages/HistoryPage";
+import XrayPage from "./pages/XrayPage";
 import NotFound from "./pages/NotFound";
 import SettingsPage from './pages/SettingsPage';
 import { ContentProvider } from "./context/ContentContext";
@@ -32,6 +33,7 @@ const App = () => (
             <Route element={<AppLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/results" element={<ResultsPage />} />
+              <Route path="/xray" element={<XrayPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>

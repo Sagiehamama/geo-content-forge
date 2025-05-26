@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FileInput, Search, Calendar, Tag, Clock, Code, Info, Save, Check, RefreshCw } from 'lucide-react';
+import { FileInput, Search, Calendar, Tag, Clock, Code, Info, Save, Check, RefreshCw, FileText, Sparkles } from 'lucide-react';
 import { languages } from '@/constants/languages';
 import { generateContent } from '@/services/contentGeneratorService';
 import { FormData, GeneratedContent } from '@/components/content/form/types';
@@ -18,10 +18,43 @@ import { Loader2 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import { ImageOption } from '@/components/content/ImageOption';
 import { ResearchInsights } from '@/components/content/ResearchInsights';
+import { XrayService, AgentConversation } from '@/services/xrayService';
 
 // Results page component - handles content display and image selection
 // Use a path to an image in the public folder
 const PLACEHOLDER_IMAGE = '/placeholder-select.png'; // Adjust filename if needed
+
+// Empty State Component
+const EmptyState = ({ onCreateNew }: { onCreateNew: () => void }) => (
+  <div className="flex flex-col items-center justify-center py-16 px-4">
+    <div className="max-w-md text-center">
+      <div className="mb-6">
+        <div className="mx-auto w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+          <FileText className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-2">No Content Yet</h2>
+        <p className="text-muted-foreground">
+          It looks like you haven't generated any content yet. Create your first AI-powered article to get started.
+        </p>
+      </div>
+      
+      <div className="space-y-3">
+        <Button onClick={onCreateNew} className="w-full">
+          <Sparkles className="h-4 w-4 mr-2" />
+          Create New Content
+        </Button>
+        <Button variant="outline" onClick={() => window.location.href = '/history'} className="w-full">
+          <Clock className="h-4 w-4 mr-2" />
+          View History
+        </Button>
+      </div>
+      
+      <div className="mt-8 text-sm text-muted-foreground">
+        <p>💡 Tip: Use the research agent to discover insights from Reddit communities and create more engaging content.</p>
+      </div>
+    </div>
+  </div>
+);
 
 const ResultsPage = () => {
   const navigate = useNavigate();
@@ -53,11 +86,13 @@ const ResultsPage = () => {
   const [customDescription, setCustomDescription] = useState('');
   const [lastCustomDescription, setLastCustomDescription] = useState('');
   
-  // If we don't have form data, redirect to home
+  // If we don't have form data, show empty state instead of redirect
+  const showEmptyState = !contextFormData && !contextContent && !isLoading;
+  
+  // Only redirect if we're loading and have no data
   useEffect(() => {
-    if (!contextFormData) {
-      navigate('/');
-    }
+    // Don't redirect immediately - let the empty state handle it
+    // This allows users to see the empty state if they navigate directly to /results
   }, [contextFormData, navigate]);
   
   // Load last custom description from localStorage
@@ -133,7 +168,23 @@ const ResultsPage = () => {
       return;
     }
     
-    if (contextContent && contextContent.content && contextMediaSpots.length === 0) {
+    // Check if we need to fetch media suggestions
+    // We need them if: no spots exist OR spots exist but have no real image options (only placeholders)
+    const needsMediaSuggestions = contextMediaSpots.length === 0 || 
+      contextMediaSpots.every(spot => 
+        !spot.options || 
+        spot.options.length === 0 || 
+        spot.options.every(option => 
+          option.url === PLACEHOLDER_IMAGE || 
+          option.url === '/placeholder-select.png' ||
+          option.url.startsWith('data:image/svg+xml;base64,') ||
+          option.source === 'System (Error loading Unsplash images)'
+        )
+      );
+    
+    // Removed verbose debug logging
+    
+    if (contextContent && contextContent.content && needsMediaSuggestions) {
       // Check if we're in manual mode with uploaded files
       if (contextFormData?.mediaMode === 'manual' && contextFormData?.mediaFiles && contextFormData.mediaFiles.length > 0) {
         console.log('Manual mode detected with uploaded files:', contextFormData.mediaFiles.length);
@@ -196,8 +247,64 @@ const ResultsPage = () => {
       setMediaLoading(true);
       setMediaError(null);
       console.log(`[${new Date().toISOString()}] Frontend: Calling getMediaSuggestions`);
-      getMediaSuggestions({ markdown: contextContent.content, title: contextContent.title })
-        .then(spots => {
+      
+      // 🎯 XRAY: Get current session ID if exists
+      const currentSession = XrayService.getCurrentSession();
+      const xraySessionId = currentSession?.contentId;
+      
+      getMediaSuggestions({ 
+        markdown: contextContent.content, 
+        title: contextContent.title,
+        xraySessionId: xraySessionId
+      })
+        .then(result => {
+          console.log('Media suggestions received:', result);
+          
+          // 🎯 XRAY: Capture Media Agent conversations if available
+          if (result.conversations?.media_agent && xraySessionId) {
+            try {
+                          const mediaConversation: AgentConversation = {
+              agentName: 'media_agent',
+              order: 3, // After research and content agents
+              steps: result.conversations.media_agent.steps || [{
+                id: 'media_analysis_fallback',
+                type: 'ai_conversation',
+                name: 'Media Analysis (Legacy)',
+                description: 'AI analyzes content to identify optimal image placement locations',
+                timestamp: Date.now(),
+                duration: result.conversations.media_agent.timing?.duration || 0,
+                status: 'completed',
+                messages: result.conversations.media_agent.messages,
+                model: result.conversations.media_agent.model,
+                tokens: result.conversations.media_agent.tokens
+              }],
+              messages: result.conversations.media_agent.messages,
+              timing: result.conversations.media_agent.timing,
+              tokens: result.conversations.media_agent.tokens,
+              model: result.conversations.media_agent.model
+            };
+              
+              XrayService.logConversation(xraySessionId, mediaConversation);
+              
+              // Log data flow from content generator to media agent
+              XrayService.logDataFlow(xraySessionId, {
+                from: 'content_generator',
+                to: 'media_agent',
+                data: { 
+                  markdownContent: contextContent.content.substring(0, 200) + '...',
+                  contentTitle: contextContent.title
+                },
+                summary: `Media Agent analyzed generated markdown content to identify optimal image placement locations`
+              });
+              
+              console.log('✅ XRAY: Media Agent conversation captured');
+            } catch (xrayError) {
+              console.error('❌ XRAY: Failed to capture media conversation:', xrayError);
+              // Don't fail media loading if XRAY capture fails
+            }
+          }
+          
+          let spots = result.images;
           console.log('Media spots received:', spots);
           console.log('First spot options:', spots[0]?.options);
           if (spots.length === 0) {
@@ -335,9 +442,7 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
   // Helper to get the selected image URL or placeholder
   const getImageForSpot = (location: string): string => {
     const finalImage = contextFinalImages.find(img => img.location === location);
-    const imageUrl = finalImage?.url || PLACEHOLDER_IMAGE;
-    console.log(`getImageForSpot(${location}): finalImage =`, finalImage, 'returning:', imageUrl);
-    return imageUrl;
+    return finalImage?.url || PLACEHOLDER_IMAGE;
   };
   
   // Handler for retrying content generation
@@ -352,22 +457,106 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
     setMediaLoading(true);
     setMediaError(null);
     
+    // If this is a custom search, clear previously selected images
+    if (customDescription) {
+      // Clear all previously selected images by setting each spot to null
+      contextFinalImages.forEach(img => {
+        updateFinalImage(img.location, null);
+      });
+      console.log('🔄 Custom search: Cleared previously selected images');
+    }
+    
     try {
+      // 🎯 XRAY: Get current session ID if exists
+      const currentSession = XrayService.getCurrentSession();
+      const xraySessionId = currentSession?.contentId;
+      
       // If we have a custom description, pass it to the media agent
       if (customDescription && contextContent) {
-        const spots = await getMediaSuggestions({
+        console.log('📤 SENDING TO MEDIA AGENT:', { customDescription, title: contextContent.title });
+        const result = await getMediaSuggestions({
           markdown: contextContent.content,
           title: contextContent.title,
-          customDescription
+          customDescription,
+          xraySessionId: xraySessionId,
+          isRefresh: true
         });
-        console.log('Custom search results:', spots);
-        setMediaSpots(spots);
+        console.log('✅ CUSTOM SEARCH RESULTS:', result.images?.length, 'spots with', result.images?.[0]?.options?.length, 'options each');
+        console.log('🖼️ FIRST SPOT IMAGES:', result.images?.[0]?.options?.map(opt => ({ url: opt.url.substring(0, 60), alt: opt.alt })));
+        
+        // 🎯 XRAY: Capture Media Agent conversations if available
+        if (result.conversations?.media_agent && xraySessionId) {
+          try {
+            const mediaConversation: AgentConversation = {
+              agentName: 'media_agent',
+              order: 3,
+              steps: result.conversations.media_agent.steps || [{
+                id: 'media_analysis_fallback',
+                type: 'ai_conversation',
+                name: 'Media Analysis (Legacy)',
+                description: 'AI analyzes content to identify optimal image placement locations',
+                timestamp: Date.now(),
+                duration: result.conversations.media_agent.timing?.duration || 0,
+                status: 'completed',
+                messages: result.conversations.media_agent.messages,
+                model: result.conversations.media_agent.model,
+                tokens: result.conversations.media_agent.tokens
+              }],
+              messages: result.conversations.media_agent.messages,
+              timing: result.conversations.media_agent.timing,
+              tokens: result.conversations.media_agent.tokens,
+              model: result.conversations.media_agent.model
+            };
+            
+            XrayService.logConversation(xraySessionId, mediaConversation);
+            console.log('✅ XRAY: Media Agent custom search conversation captured');
+          } catch (xrayError) {
+            console.error('❌ XRAY: Failed to capture media conversation:', xrayError);
+          }
+        }
+        
+        setMediaSpots(result.images);
+        console.log('✅ Media spots updated after custom search');
       } else if (contextContent) {
-        const spots = await getMediaSuggestions({
+        const result = await getMediaSuggestions({
           markdown: contextContent.content,
-          title: contextContent.title
+          title: contextContent.title,
+          xraySessionId: xraySessionId,
+          isRefresh: true
         });
-        setMediaSpots(spots);
+        
+        // 🎯 XRAY: Capture Media Agent conversations if available
+        if (result.conversations?.media_agent && xraySessionId) {
+          try {
+            const mediaConversation: AgentConversation = {
+              agentName: 'media_agent',
+              order: 3,
+              steps: result.conversations.media_agent.steps || [{
+                id: 'media_analysis_fallback',
+                type: 'ai_conversation',
+                name: 'Media Analysis (Legacy)',
+                description: 'AI analyzes content to identify optimal image placement locations',
+                timestamp: Date.now(),
+                duration: result.conversations.media_agent.timing?.duration || 0,
+                status: 'completed',
+                messages: result.conversations.media_agent.messages,
+                model: result.conversations.media_agent.model,
+                tokens: result.conversations.media_agent.tokens
+              }],
+              messages: result.conversations.media_agent.messages,
+              timing: result.conversations.media_agent.timing,
+              tokens: result.conversations.media_agent.tokens,
+              model: result.conversations.media_agent.model
+            };
+            
+            XrayService.logConversation(xraySessionId, mediaConversation);
+            console.log('✅ XRAY: Media Agent refresh conversation captured');
+          } catch (xrayError) {
+            console.error('❌ XRAY: Failed to capture media conversation:', xrayError);
+          }
+        }
+        
+        setMediaSpots(result.images);
       }
       
       toast.success('Image suggestions refreshed');
@@ -382,24 +571,25 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
   
   // Handler for button click
   const handleRefreshClick = async () => {
-    await handleRefreshImages();
+    // If we're in a dialog for a specific spot, refresh just that spot
+    if (selectedSpot) {
+      console.log(`🔄 Refreshing images for specific spot: ${selectedSpot}`);
+      await handleRefreshImages();
+      // The dialog will automatically update because contextMediaSpots will change
+    } else {
+      // Otherwise refresh all spots
+      console.log('🔄 Refreshing all image spots');
+      await handleRefreshImages();
+    }
   };
   
   // Handler for custom description search
   const handleCustomSearch = async () => {
-    console.log('Handling custom search with description:', customDescription);
     if (customDescription.trim()) {
-      // Save to localStorage
+      console.log('🔍 CUSTOM SEARCH:', customDescription);
       localStorage.setItem('lastCustomDescription', customDescription);
       setLastCustomDescription(customDescription);
-      
-      // Trigger search
-      console.log('Calling getMediaSuggestions with custom description');
       await handleRefreshImages(customDescription);
-      
-      // DON'T reset UI - keep useCustomDescription true so user knows they're using custom search
-      // setUseCustomDescription(false);
-      // console.log('Reset useCustomDescription to false');
     }
   };
   
@@ -421,24 +611,18 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
     processedContent = processedContent.replace(/^\s*spot\s+\d+\s*$/gmi, '');
     processedContent = processedContent.replace(/\n\s*spot\s+\d+\s*\n/gi, '\n\n');
     
-    console.log('=== MARKDOWN GENERATION DEBUG ===');
-    console.log('Initial processed content (first 200 chars):', processedContent.substring(0, 200));
-    console.log('Media spots:', contextMediaSpots);
-    console.log('Final images:', contextFinalImages);
+    // Removed verbose markdown debug logging
     
     // PHASE 1: Check for semantic [IMAGE:description] markers first
     const semanticMarkers = processedContent.match(/\[IMAGE:([^\]]+)\]/g);
     
     if (semanticMarkers && semanticMarkers.length > 0) {
-      console.log('=== SEMANTIC MARKERS FOUND ===');
-      console.log('Found semantic markers:', semanticMarkers);
+      console.log('✅ SEMANTIC MARKERS:', semanticMarkers.length);
       
       // Process semantic markers with proper spot mapping
       semanticMarkers.forEach((marker, index) => {
         const spotLocation = `spot_${index + 1}`;
         const imageDescription = marker.match(/\[IMAGE:([^\]]+)\]/)?.[1] || '';
-        
-        console.log(`Processing semantic marker ${index + 1}: ${marker} -> ${spotLocation}`);
         
         // Find corresponding image for this spot
         const finalImage = contextFinalImages.find(img => img.location === spotLocation);
@@ -447,20 +631,17 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
         if (finalImage) {
           // Use selected image
           replacement = `![${finalImage.alt}](${finalImage.url})`;
-          console.log(`Replacing ${marker} with selected image: ${replacement}`);
         } else {
           // Use placeholder with spot-specific fragment for click tracking
           replacement = `![${imageDescription}](${PLACEHOLDER_IMAGE}#${spotLocation})`;
-          console.log(`Replacing ${marker} with placeholder: ${replacement}`);
         }
         
         // Replace the semantic marker with image markdown
         processedContent = processedContent.replace(marker, replacement);
       });
       
-      console.log('=== SEMANTIC PROCESSING COMPLETE ===');
     } else {
-      console.log('=== NO SEMANTIC MARKERS - USING MATHEMATICAL POSITIONING ===');
+      console.log('⚠️ NO SEMANTIC MARKERS - using fallback positioning');
       
       // PHASE 2: Fall back to mathematical positioning for legacy content
       if (contextMediaSpots.length > 0) {
@@ -472,8 +653,6 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
           
           const imageUrl = getImageForSpot(spot.location);
           const imgMarkdown = `![Image ${spotNumber}](${imageUrl})`;
-          
-          console.log(`Processing spot ${spotNumber}: regex=${regex}, imageUrl=${imageUrl}`);
           processedContent = processedContent.replace(regex, imgMarkdown);
         }
         
@@ -484,49 +663,69 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
             const imageUrl = getImageForSpot(spot.location);
             const altText = spot.options.find(opt => opt.url === imageUrl)?.alt || spot.location.replace(/_/g, ' ');
             const replacementHtml = `![${altText}](${imageUrl})`;
-            console.log(`Replacing ${locationTag} with ${replacementHtml}`);
             processedContent = processedContent.replace(locationTag, replacementHtml);
           }
         });
         
         // If no images found at all, inject placeholders at logical spots
-        // But each placeholder should be specifically tied to a spot
         if (!processedContent.includes('![')) {
-          console.log('No images found in content, injecting placeholders with specific spot markers');
           const paragraphs = processedContent.split('\n\n');
           const totalParagraphs = paragraphs.length;
           
-          // Calculate optimal image positions based on content length
-          const imagePositions = contextMediaSpots.map((_, idx) => {
-            // Distribute images evenly throughout the content
-            return Math.floor((totalParagraphs / (contextMediaSpots.length + 1)) * (idx + 1));
-          });
-          
-          console.log('Image positions calculated:', imagePositions);
-          
-          // Insert spot-specific placeholders at calculated positions
-          imagePositions.forEach((position, idx) => {
-            if (position < paragraphs.length) {
-              const spot = contextMediaSpots[idx];
-              
-              // Check if this spot has a selected image
-              const finalImage = contextFinalImages.find(img => img.location === spot.location);
-              
-              let imgMarkdown;
-              if (finalImage) {
-                // Use the selected image
-                imgMarkdown = `![${finalImage.alt}](${finalImage.url})`;
-                console.log(`Inserting selected image at position ${position}: ${imgMarkdown}`);
-              } else {
-                // Use placeholder with spot-specific ID so we can track clicks
-                imgMarkdown = `![${spot.location.replace(/_/g, ' ')}](${PLACEHOLDER_IMAGE}#${spot.location})`;
-                console.log(`Inserting placeholder at position ${position}: ${imgMarkdown}`);
-              }
-              
-              // Insert after the paragraph at the calculated position
-              paragraphs.splice(position, 0, imgMarkdown);
+          // Special handling for hero image (first spot)
+          if (contextMediaSpots.length > 0) {
+            const heroSpot = contextMediaSpots[0];
+            const heroFinalImage = contextFinalImages.find(img => img.location === heroSpot.location);
+            
+            let heroImgMarkdown;
+            if (heroFinalImage) {
+              heroImgMarkdown = `![${heroFinalImage.alt}](${heroFinalImage.url})`;
+            } else {
+              heroImgMarkdown = `![Hero image for article](${PLACEHOLDER_IMAGE}#${heroSpot.location})`;
             }
-          });
+            
+            // Insert hero image right after the title (first paragraph is usually the title)
+            if (paragraphs.length > 1) {
+              paragraphs.splice(1, 0, heroImgMarkdown);
+            } else {
+              paragraphs.unshift(heroImgMarkdown);
+            }
+          }
+          
+          // Handle remaining spots (skip first spot since it's the hero)
+          const remainingSpots = contextMediaSpots.slice(1);
+          if (remainingSpots.length > 0) {
+            // Calculate positions for remaining images (distribute through content)
+            const imagePositions = remainingSpots.map((_, idx) => {
+              // Start from position 3 (after title and hero image) and distribute evenly
+              const startPosition = 3;
+              const availablePositions = Math.max(1, paragraphs.length - startPosition);
+              return startPosition + Math.floor((availablePositions / (remainingSpots.length + 1)) * (idx + 1));
+            });
+            
+            // Insert remaining images at calculated positions (in reverse order to maintain positions)
+            imagePositions.reverse().forEach((position, reverseIdx) => {
+              const idx = remainingSpots.length - 1 - reverseIdx;
+              const spot = remainingSpots[idx];
+              
+              if (position < paragraphs.length) {
+                // Check if this spot has a selected image
+                const finalImage = contextFinalImages.find(img => img.location === spot.location);
+                
+                let imgMarkdown;
+                if (finalImage) {
+                  // Use the selected image
+                  imgMarkdown = `![${finalImage.alt}](${finalImage.url})`;
+                } else {
+                  // Use placeholder with spot-specific ID so we can track clicks
+                  imgMarkdown = `![${spot.location.replace(/_/g, ' ')}](${PLACEHOLDER_IMAGE}#${spot.location})`;
+                }
+                
+                // Insert at the calculated position
+                paragraphs.splice(position, 0, imgMarkdown);
+              }
+            });
+          }
           
           // Join everything back together
           processedContent = paragraphs.join('\n\n');
@@ -534,22 +733,7 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       }
     }
     
-    console.log('Final processed content (first 500 chars):', processedContent.substring(0, 500));
-    
-    // Also show content around image insertions for debugging
-    const imageMarkdownPattern = /!\[.*?\]\(.*?\)/g;
-    const imageMatches = Array.from(processedContent.matchAll(imageMarkdownPattern));
-    console.log('Found image markdown in final content:', imageMatches.map(match => match[0]));
-    
-    // Show content around first image insertion
-    if (imageMatches.length > 0) {
-      const firstImageIndex = imageMatches[0].index || 0;
-      const start = Math.max(0, firstImageIndex - 100);
-      const end = Math.min(processedContent.length, firstImageIndex + 200);
-      console.log('Content around first image insertion:', processedContent.substring(start, end));
-    }
-    
-    console.log('=== END MARKDOWN DEBUG ===');
+    // Removed verbose final content logging
     
     return processedContent;
   };
@@ -577,7 +761,7 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
     }
     
     // First try to match by the image src (for already selected images)
-    let matchedSpot = contextMediaSpots.find(spot => {
+    const matchedSpot = contextMediaSpots.find(spot => {
       const finalImage = contextFinalImages.find(img => img.location === spot.location);
       return finalImage?.url === src;
     });
@@ -623,7 +807,9 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
         </div>
       )}
 
-      {isLoading ? (
+      {showEmptyState ? (
+        <EmptyState onCreateNew={handleCreateNew} />
+      ) : isLoading ? (
         <Card className="mb-8">
           <CardContent className="pt-6">
             <div className="flex flex-col items-center justify-center py-12">
@@ -681,54 +867,17 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                               key={`content-${contextFinalImages.length}-${contextFinalImages.map(img => img.location).join('-')}`}
                               urlTransform={(uri) => {
                                 // Critical: Allow blob URLs to pass through without sanitization
-                                console.log('🔍 urlTransform called with:', uri);
-                                if (uri.startsWith('blob:') || uri.startsWith('data:')) {
-                                  console.log('✅ Allowing blob/data URL:', uri);
-                                  return uri;
-                                }
-                                if (uri.startsWith('http:') || uri.startsWith('https:')) {
-                                  console.log('✅ Allowing HTTP URL:', uri);
-                                  return uri;
-                                }
-                                console.log('✅ Allowing other URL:', uri);
-                                return uri;
+                                                                              return uri;
                               }}
                               components={{
                                 a: ({ node, ...props }) => (
                                   <a {...props} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" />
                                 ),
                                 img: ({ node, ...props }) => {
-                                  console.log('=== IMG COMPONENT DEBUG ===');
-                                  console.log('props.src:', props.src);
-                                  console.log('props.alt:', props.alt);
-                                  
                                   // Determine if this is a placeholder image (handle fragment URLs)
                                   const srcWithoutFragment = props.src?.split('#')[0];
                                   const isPlaceholder = srcWithoutFragment === PLACEHOLDER_IMAGE || !props.src;
-                                  
-                                  console.log('srcWithoutFragment:', srcWithoutFragment);
-                                  console.log('PLACEHOLDER_IMAGE:', PLACEHOLDER_IMAGE);
-                                  console.log('isPlaceholder:', isPlaceholder);
-                                  
-                                  // Check if it's a blob URL
                                   const isBlobUrl = props.src?.startsWith('blob:');
-                                  console.log('isBlobUrl:', isBlobUrl);
-                                  
-                                  if (isBlobUrl) {
-                                    console.log('🔍 BLOB URL DETECTED:', props.src);
-                                    // Test if blob URL is still valid
-                                    fetch(props.src)
-                                      .then(response => {
-                                        console.log('✅ Blob URL fetch success:', response.status, response.ok);
-                                        return response.blob();
-                                      })
-                                      .then(blob => {
-                                        console.log('✅ Blob content:', blob.size, 'bytes', blob.type);
-                                      })
-                                      .catch(error => {
-                                        console.error('❌ Blob URL fetch failed:', error);
-                                      });
-                                  }
 
                                   // Try to find the spot this image represents.
                                   // This logic can be complex if props.src is already a final URL.
@@ -763,8 +912,6 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                   }
                                   
                                   const displaySrc = props.src || PLACEHOLDER_IMAGE;
-                                  console.log('Final displaySrc:', displaySrc);
-                                  console.log('=== END IMG COMPONENT DEBUG ===');
                                   
                                   return (
                                     <img 
@@ -773,17 +920,8 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                       alt={props.alt || (spotLocationToOpenDialogFor ? spotLocationToOpenDialogFor.replace(/_/g, ' ') : 'Content image')}
                                       className={`rounded-md max-w-full h-auto my-4 cursor-pointer hover:ring-2 hover:ring-primary transition-all ${isPlaceholder ? 'border-2 border-dashed border-blue-300' : ''}`} 
                                       loading="lazy" 
-                                      onLoad={() => {
-                                        if (isBlobUrl) {
-                                          console.log('✅ Blob image loaded successfully:', props.src);
-                                        }
-                                      }}
                                       onError={(e) => {
                                         console.error('❌ Image failed to load:', props.src);
-                                        console.error('Error event:', e);
-                                        if (isBlobUrl) {
-                                          console.error('❌ BLOB URL FAILED TO LOAD');
-                                        }
                                       }}
                                       onClick={() => {
                                         if (spotLocationToOpenDialogFor) {
@@ -791,7 +929,6 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                         } else if (contextMediaSpots.length > 0) {
                                           // Fallback: if no specific spot found, open for the first one.
                                           setSelectedSpot(contextMediaSpots[0].location);
-                                          console.warn("Could not determine specific spot for image click, defaulting to first spot.");
                                         } else {
                                           toast.info("No image spots defined for this content.");
                                         }
@@ -800,12 +937,13 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                                         borderWidth: '2px',
                                         borderStyle: 'dashed',
                                         borderColor: '#93c5fd',
-                                        minHeight: '100px',
-                                        maxHeight: '150px',
-                                        width: '50%',
-                                        margin: '0 auto',
+                                        minHeight: '200px',
+                                        maxHeight: '300px',
+                                        width: '100%',
+                                        maxWidth: '600px',
+                                        margin: '16px auto',
                                         display: 'block',
-                                        objectFit: 'cover',
+                                        objectFit: 'contain',
                                         backgroundColor: '#f8fafc'
                                       } : {
                                         maxWidth: '100%',
@@ -948,19 +1086,7 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
               </div>
             </div>
           ) : (
-            <Card className="mb-8">
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center justify-center py-12">
-                  <p className="text-lg font-medium text-center">Error</p>
-                  <p className="text-muted-foreground mt-2 text-center mb-4">
-                    Failed to generate content. Please try again.
-                  </p>
-                  <Button onClick={() => navigate('/')}>
-                    Return to Form
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <EmptyState onCreateNew={handleCreateNew} />
           )}
           
           {contextContent && (
@@ -1013,7 +1139,7 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
           setUseCustomDescription(false);
         }
       }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent key={`dialog-${selectedSpot}-${JSON.stringify(contextMediaSpots.map(s => s.options?.map(o => o.url.substring(0, 30)) || []))}`} className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl">Select an Image</DialogTitle>
             <DialogDescription className="text-base">
@@ -1093,20 +1219,45 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
 
           {/* Image results */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-4">
-            {selectedSpot && contextMediaSpots.map(spot => {
-              if (spot.location !== selectedSpot) return null;
-              return spot.options.map((option, idx) => (
+            {mediaLoading ? (
+              <div className="col-span-full text-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                <p className="text-muted-foreground">Loading new image suggestions...</p>
+              </div>
+            ) : selectedSpot && (() => {
+              const currentSpot = contextMediaSpots.find(spot => spot.location === selectedSpot);
+              console.log(`🖼️ Dialog showing images for spot: ${selectedSpot}`, {
+                spotFound: !!currentSpot,
+                optionsCount: currentSpot?.options?.length || 0,
+                totalSpots: contextMediaSpots.length,
+                firstOptionUrl: currentSpot?.options?.[0]?.url,
+                allOptions: currentSpot?.options?.map(opt => ({ url: opt.url.substring(0, 50), alt: opt.alt })),
+                dialogKey: `dialog-${selectedSpot}-${JSON.stringify(contextMediaSpots.map(s => s.options?.map(o => o.url.substring(0, 30)) || []))}`
+              });
+              
+              if (!currentSpot) {
+                return (
+                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                    <p>No images available for this spot.</p>
+                    <p className="text-sm mt-2">Try refreshing to get new suggestions.</p>
+                  </div>
+                );
+              }
+              
+              return currentSpot.options.map((option, idx) => (
                 <ImageOption
-                  key={`${spot.location}-${idx}`}
+                  key={`${currentSpot.location}-${idx}-${option.url}`}
                   option={option}
                   onSelect={() => handleSelectImage(option)}
                 />
               ));
-            })}
-            <ImageOption
-              option={null}
-              onSelect={() => handleSelectImage(null)}
-            />
+            })()}
+            {!mediaLoading && (
+              <ImageOption
+                option={null}
+                onSelect={() => handleSelectImage(null)}
+              />
+            )}
           </div>
 
           <DialogFooter className="flex items-center justify-end pt-4 border-t">

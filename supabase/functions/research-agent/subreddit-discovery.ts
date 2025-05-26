@@ -7,6 +7,20 @@ const openAIApiKey = Deno.env.get('OPENAI_API_KEY')!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// 🎯 XRAY: Interface for capturing AI conversation
+export interface SubredditDiscoveryResult {
+  subreddits: SubredditInfo[];
+  conversationData?: {
+    messages: Array<{
+      role: 'system' | 'user' | 'assistant';
+      content: string;
+      timestamp: number;
+    }>;
+    tokens?: number;
+    usedCache: boolean;
+  };
+}
+
 export class SubredditDiscovery {
   
   // Generate a hash for topic + company for caching
@@ -84,6 +98,35 @@ export class SubredditDiscovery {
     }
   }
 
+  // Get prompt templates from database
+  private async getPromptTemplates(): Promise<{ systemPrompt: string, userPrompt: string }> {
+    try {
+      const [systemResult, userResult] = await Promise.all([
+        supabase
+          .from('content_templates')
+          .select('system_prompt')
+          .eq('name', 'research_subreddit_discovery_system')
+          .single(),
+        supabase
+          .from('content_templates')
+          .select('user_prompt')
+          .eq('name', 'research_subreddit_discovery')
+          .single()
+      ]);
+
+      const systemPrompt = systemResult.data?.system_prompt || 'You are a Reddit research expert. Your job is to identify the most relevant subreddits for finding original insights on a given topic. Always respond with valid JSON only.';
+      const userPrompt = userResult.data?.user_prompt || this.getFallbackPrompt();
+
+      return { systemPrompt, userPrompt };
+    } catch (error) {
+      console.error("Error fetching prompt templates:", error);
+      return { 
+        systemPrompt: 'You are a Reddit research expert. Your job is to identify the most relevant subreddits for finding original insights on a given topic. Always respond with valid JSON only.',
+        userPrompt: this.getFallbackPrompt()
+      };
+    }
+  }
+
   // Get prompt template from database
   private async getPromptTemplate(): Promise<string> {
     try {
@@ -130,14 +173,21 @@ Format as JSON array with this structure:
   }
 
   // Call OpenAI to discover subreddits
-  private async discoverWithLLM(prompt: string, company: string): Promise<SubredditInfo[]> {
+  private async discoverWithLLM(prompt: string, company: string): Promise<{ subreddits: SubredditInfo[], conversationData: any }> {
     try {
       console.log("Discovering subreddits with LLM...");
 
-      const promptTemplate = await this.getPromptTemplate();
-      const userPrompt = promptTemplate
+      const { systemPrompt, userPrompt } = await this.getPromptTemplates();
+      const fullUserPrompt = userPrompt
         .replace('{{prompt}}', prompt)
         .replace('{{company_description}}', company);
+
+      // 🎯 XRAY: Capture conversation messages
+      const conversationStart = Date.now();
+      const messages = [
+        { role: 'system' as const, content: systemPrompt, timestamp: conversationStart },
+        { role: 'user' as const, content: fullUserPrompt, timestamp: conversationStart + 50 }
+      ];
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -150,11 +200,11 @@ Format as JSON array with this structure:
           messages: [
             {
               role: 'system',
-              content: 'You are a Reddit research expert. Your job is to identify the most relevant subreddits for finding original insights on a given topic. Always respond with valid JSON only.'
+              content: systemPrompt
             },
             {
               role: 'user',
-              content: userPrompt
+              content: fullUserPrompt
             }
           ],
           temperature: 0.3,
@@ -168,6 +218,13 @@ Format as JSON array with this structure:
 
       const data = await response.json();
       const content = data.choices[0].message.content;
+
+      // 🎯 XRAY: Add assistant response to conversation
+      messages.push({ 
+        role: 'assistant', 
+        content: content, 
+        timestamp: Date.now() 
+      });
 
       // Parse the JSON response
       let subreddits: SubredditInfo[];
@@ -205,7 +262,16 @@ Format as JSON array with this structure:
         .slice(0, 10); // Ensure we don't exceed 10 subreddits
 
       console.log(`LLM discovered ${validSubreddits.length} subreddits`);
-      return validSubreddits;
+      
+      // 🎯 XRAY: Return both subreddits and conversation data
+      return {
+        subreddits: validSubreddits,
+        conversationData: {
+          messages,
+          tokens: data.usage?.total_tokens || 0,
+          usedCache: false
+        }
+      };
 
     } catch (error) {
       console.error("Error in LLM subreddit discovery:", error);
@@ -213,31 +279,31 @@ Format as JSON array with this structure:
     }
   }
 
-  // Main discovery method with caching
-  async discoverSubreddits(prompt: string, company: string): Promise<SubredditInfo[]> {
+  // Main discovery method - always uses AI (no caching)
+  async discoverSubreddits(prompt: string, company: string): Promise<SubredditDiscoveryResult> {
     try {
-      // Generate cache key
-      const topicHash = await this.generateTopicHash(prompt, company);
+      console.log("🤖 ALWAYS using AI for subreddit discovery - no cache");
       
-      // Check cache first
-      const cachedSubreddits = await this.checkCache(topicHash);
-      if (cachedSubreddits) {
-        return cachedSubreddits;
-      }
-
-      // Discover with LLM if not in cache
-      const discoveredSubreddits = await this.discoverWithLLM(prompt, company);
+      // Always discover with LLM - no caching
+      const result = await this.discoverWithLLM(prompt, company);
       
-      // Store in cache for future use
-      await this.storeInCache(topicHash, prompt, company, discoveredSubreddits);
-      
-      return discoveredSubreddits;
+      return {
+        subreddits: result.subreddits,
+        conversationData: result.conversationData
+      };
 
     } catch (error) {
       console.error("Error in subreddit discovery:", error);
       
       // Return fallback subreddits if all else fails
-      return this.getFallbackSubreddits(prompt);
+      return {
+        subreddits: this.getFallbackSubreddits(prompt),
+        conversationData: {
+          messages: [],
+          tokens: 0,
+          usedCache: false
+        }
+      };
     }
   }
 

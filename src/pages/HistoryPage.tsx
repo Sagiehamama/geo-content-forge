@@ -40,12 +40,19 @@ const HistoryPage = () => {
   
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays <= 7) return `${diffDays}d ago`;
+    if (diffDays <= 30) return `${Math.floor(diffDays / 7)}w ago`;
+    
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric'
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
     }).format(date);
   };
   
@@ -76,8 +83,9 @@ const HistoryPage = () => {
         wordCount: requestData.word_count,
         includeFrontmatter: requestData.include_frontmatter || false,
         includeImages: requestData.include_images || false,
+        enableResearch: false, // Default value
         mediaMode: 'auto', // Default
-        mediaFile: null,
+        mediaFiles: null,
       });
       
       // Set the content in context
@@ -132,54 +140,57 @@ const HistoryPage = () => {
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : history.length > 0 ? (
-        <div className="space-y-6">
+        <div className="space-y-3">
           {history.map(item => (
             <Card key={item.id} className="card-hover">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-xl mb-2">{item.title}</CardTitle>
-                    <CardDescription>
-                      Created on {formatDate(item.generatedAt)}
-                    </CardDescription>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-base line-clamp-1 flex-1 mr-4">
+                        {item.title}
+                      </h3>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-sm text-muted-foreground">
+                          {formatDate(item.generatedAt)}
+                        </span>
+                        <div className="flex gap-2">
+                          <span className="bg-muted px-2 py-1 rounded text-xs">
+                            {item.wordCount}w
+                          </span>
+                          <span className="bg-muted px-2 py-1 rounded text-xs">
+                            {item.language === 'en' ? 'EN' : item.language.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                      {item.prompt}
+                    </p>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium bg-muted px-2.5 py-0.5 rounded-full">
-                      {item.language === 'en' ? 'English' : item.language}
-                    </span>
-                    <span className="text-sm font-medium bg-muted px-2.5 py-0.5 rounded-full">
-                      {item.wordCount} words
-                    </span>
+                  
+                  <div className="flex gap-2 ml-4 flex-shrink-0">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewContent(item)}
+                      className="flex items-center gap-2"
+                    >
+                      <Eye className="h-4 w-4" />
+                      View
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleDeleteContent(item.id || '')}
+                      className="hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="pb-0">
-                <p className="text-muted-foreground line-clamp-2">
-                  {item.prompt}
-                </p>
               </CardContent>
-              <CardFooter className="pt-4">
-                <div className="flex justify-end w-full space-x-3">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => handleDeleteContent(item.id || '')}
-                    className="flex items-center gap-1"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleViewContent(item)}
-                    className="flex items-center gap-1"
-                  >
-                    <Eye className="h-4 w-4" />
-                    View Content
-                  </Button>
-                </div>
-              </CardFooter>
             </Card>
           ))}
         </div>

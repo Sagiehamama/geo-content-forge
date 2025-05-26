@@ -2,6 +2,39 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// 🎯 XRAY: Interfaces for Media Agent step tracking
+interface XrayMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+}
+
+interface XrayStep {
+  id: string;
+  type: 'ai_conversation' | 'logical_operation';
+  name: string;
+  description: string;
+  timestamp: number;
+  duration?: number;
+  status: 'running' | 'completed' | 'failed';
+  // For AI conversations
+  messages?: XrayMessage[];
+  model?: string;
+  tokens?: number;
+  // For logical operations
+  input?: any;
+  output?: any;
+  metadata?: any;
+}
+
+interface XrayConversation {
+  steps: XrayStep[];
+  messages: XrayMessage[];
+  timing: { start: number; end: number; duration: number };
+  tokens?: number;
+  model: string;
+}
+
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -14,62 +47,123 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/600x400?text=Image+Not+Found';
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDYwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI2MDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjMwMCIgeT0iMjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiBmaWxsPSIjOUI5QjlCIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiPkltYWdlIE5vdCBGb3VuZDwvdGV4dD4KPC9zdmc+';
 
 // Simplify complex queries to improve Unsplash results
 function simplifySearchQuery(query: string): string {
-  // Common query simplification mappings
+  console.log('🔍 SIMPLIFY INPUT:', query);
+  
+  // Common query simplification mappings - keep them specific and descriptive
   const queryMappings: Record<string, string> = {
-    // Location-specific terms -> general terms
-    'geneva to chamonix': 'mountains',
-    'chamonix': 'mountains',
-    'geneva airport': 'airport',
-    'swiss alps': 'mountains',
-    'mont blanc': 'mountains',
+    // Location-specific terms -> more specific terms
+    'geneva to chamonix': 'alpine mountains scenery',
+    'chamonix': 'chamonix mont blanc',
+    'geneva airport': 'geneva airport terminal',
+    'swiss alps': 'swiss alpine landscape',
+    'mont blanc': 'mont blanc mountain',
     
-    // Complex transport terms -> simple ones
-    'car rental at': 'car rental',
-    'bus from': 'bus',
-    'travel from': 'travel',
-    'scenic route': 'scenic',
-    'journey to': 'travel',
+    // Complex transport terms -> specific ones
+    'car rental at': 'car rental service',
+    'bus from': 'bus transportation',
+    'travel from': 'travel journey',
+    'scenic route': 'scenic mountain road',
+    'journey to': 'travel destination',
     
-    // Activity terms simplification
-    'mountain climbing in': 'climbing',
-    'hiking trails and': 'hiking',
-    'thermal spas in': 'spa',
-    'adventure seekers': 'adventure',
+    // Activity terms - keep specific
+    'mountain climbing in': 'mountain climbing gear',
+    'hiking trails and': 'hiking trail nature',
+    'thermal spas in': 'thermal spa relaxation',
+    'adventure seekers': 'outdoor adventure',
+    
+    // Food and vegan-related terms - keep descriptive
+    'thoughtful_individual_pondering': 'person thinking about food choices',
+    'ethical_choices_with_food': 'ethical food decisions',
+    'vegan_pizza_on_wooden_board': 'vegan pizza wooden board',
+    'fresh_ingredients': 'fresh organic vegetables',
+    'diverse_group_of_people_sharing': 'people sharing vegan meal',
+    'vegan_meal_in_cozy_setting': 'cozy vegan restaurant',
+    'community_gathering_discussing': 'vegan community gathering',
+    'vegan_principles': 'vegan lifestyle philosophy',
+    'passionate_discussion_on_reddit': 'vegan community discussion',
+    'vegan_restaurant_menu': 'vegan restaurant dishes',
+    'plant_based_dishes': 'colorful plant based food',
+    'dining_experience': 'restaurant dining experience',
+    'modern_urban_setting': 'modern urban restaurant',
+    'vibrant_plant_based_dishes': 'vibrant vegan food plating',
+    'educational_workshop': 'vegan education workshop',
+    'advocacy_group': 'vegan advocacy meeting'
   };
   
   const lowerQuery = query.toLowerCase().trim();
   
+  // Replace underscores with spaces for better processing
+  const normalizedQuery = lowerQuery.replace(/_/g, ' ');
+  
   // Check for direct mappings first
   for (const [complex, simple] of Object.entries(queryMappings)) {
-    if (lowerQuery.includes(complex)) {
+    if (normalizedQuery.includes(complex)) {
       console.log(`Simplified query "${query}" -> "${simple}"`);
       return simple;
     }
   }
   
-  // If no mapping found, extract key terms (max 2 words)
-  const words = lowerQuery.split(/\s+/).filter(word => 
+  // For simple, specific queries like "dogs", "cats", "cars", etc., keep them as-is
+  if (normalizedQuery.split(/\s+/).length <= 2 && !normalizedQuery.includes('_')) {
+    console.log(`🔍 SIMPLIFY OUTPUT: "${query}" -> "${normalizedQuery}" (simple query kept)`);
+    return normalizedQuery;
+  }
+  
+  // Extract key terms, keeping specific and descriptive words
+  const stopWords = ['and', 'the', 'for', 'from', 'to', 'at', 'in', 'of', 'with', 'on', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being'];
+  const words = normalizedQuery.split(/\s+/).filter(word => 
     word.length > 2 && 
-    !['and', 'the', 'for', 'from', 'to', 'at', 'in', 'of'].includes(word)
+    !stopWords.includes(word)
   );
   
-  if (words.length > 2) {
-    const simplified = words.slice(0, 2).join(' ');
-    console.log(`Simplified query "${query}" -> "${simplified}"`);
+  // Keep specific nouns, adjectives, and descriptive terms
+  // Don't over-prioritize - let natural word order and relevance guide us
+  const finalWords = words.slice(0, 4); // Allow up to 4 words for more specificity
+  
+  if (finalWords.length > 0) {
+    const simplified = finalWords.join(' ');
+    console.log(`🔍 SIMPLIFY OUTPUT: "${query}" -> "${simplified}"`);
     return simplified;
   }
   
+  console.log(`🔍 SIMPLIFY OUTPUT: "${query}" -> "${query}" (unchanged)`);
   return query;
 }
 
 // Real Unsplash image search API
-async function searchImages(query: string) {
+async function searchImages(query: string, isRefresh: boolean = false) {
   // Simplify complex queries to improve Unsplash results
-  const simplifiedQuery = simplifySearchQuery(query);
+  let simplifiedQuery = simplifySearchQuery(query);
+  
+  // Add variation for refresh requests to get different images
+  if (isRefresh) {
+    // Context-aware variations based on query type
+    const foodRelatedTerms = ['food', 'meal', 'dish', 'recipe', 'cooking', 'restaurant', 'vegan', 'pizza', 'bread', 'soup', 'salad', 'dessert'];
+    const animalRelatedTerms = ['dog', 'cat', 'bird', 'horse', 'animal', 'pet', 'wildlife'];
+    const techRelatedTerms = ['phone', 'smartphone', 'computer', 'laptop', 'technology', 'device', 'gadget'];
+    
+    const queryLower = simplifiedQuery.toLowerCase();
+    let variations: string[] = [];
+    
+    if (foodRelatedTerms.some(term => queryLower.includes(term))) {
+      variations = ['delicious', 'fresh', 'healthy', 'organic', 'artisanal', 'gourmet', 'homemade', 'colorful', 'appetizing'];
+    } else if (animalRelatedTerms.some(term => queryLower.includes(term))) {
+      variations = ['cute', 'adorable', 'playful', 'beautiful', 'happy', 'friendly', 'lovely', 'charming'];
+    } else if (techRelatedTerms.some(term => queryLower.includes(term))) {
+      variations = ['modern', 'sleek', 'innovative', 'advanced', 'professional', 'high-tech', 'cutting-edge'];
+    } else {
+      // Generic variations for other topics
+      variations = ['beautiful', 'stunning', 'amazing', 'incredible', 'wonderful', 'impressive', 'remarkable'];
+    }
+    
+    const randomVariation = variations[Math.floor(Math.random() * variations.length)];
+    simplifiedQuery = `${randomVariation} ${simplifiedQuery}`;
+    console.log(`🔄 REFRESH: Added "${randomVariation}" variation to query: "${simplifiedQuery}"`);
+  }
   
   if (!unsplashAccessKey) {
     console.warn('UNSPLASH_ACCESS_KEY not configured, using fallback images');
@@ -90,7 +184,14 @@ async function searchImages(query: string) {
   }
   
   try {
-    console.log('Searching Unsplash for (exact query):', query);
+    console.log('🔍 UNSPLASH QUERY:', {
+      originalQuery: query,
+      simplifiedQuery: simplifiedQuery,
+      encodedQuery: encodeURIComponent(simplifiedQuery),
+      isRefresh: isRefresh,
+      finalUrl: `https://api.unsplash.com/search/photos?query=${encodeURIComponent(simplifiedQuery)}&per_page=3&orientation=landscape`
+    });
+    
     const response = await fetch(
       `https://api.unsplash.com/search/photos?query=${encodeURIComponent(simplifiedQuery)}&per_page=3&orientation=landscape`,
       {
@@ -101,13 +202,52 @@ async function searchImages(query: string) {
     );
     
     if (!response.ok) {
+      console.error('❌ UNSPLASH API ERROR:', response.status, response.statusText);
       throw new Error(`Unsplash API error: ${response.status}`);
     }
     
     const data = await response.json();
-    console.log('Unsplash response:', data.results?.length, 'images found for query:', simplifiedQuery);
+    console.log('✅ UNSPLASH RESPONSE:', {
+      query: simplifiedQuery,
+      resultsCount: data.results?.length || 0,
+      totalResults: data.total || 0,
+      firstImageUrl: data.results?.[0]?.urls?.regular?.substring(0, 50) + '...' || 'none'
+    });
     
     if (!data.results?.length) {
+      // Try a more generic fallback search with universally relevant terms
+      const fallbackTerms = ['office', 'business', 'technology', 'workspace', 'computer', 'teamwork'];
+      const queryWords = simplifiedQuery.toLowerCase().split(' ');
+      const matchingFallback = fallbackTerms.find(term => 
+        queryWords.some(word => term.includes(word)) || 
+        term.split(' ').some(termWord => queryWords.includes(termWord))
+      ) || 'business'; // Default to business if no match
+      
+      if (matchingFallback && matchingFallback !== simplifiedQuery) {
+        console.log(`No results for "${simplifiedQuery}", trying fallback: "${matchingFallback}"`);
+        const fallbackResponse = await fetch(
+          `https://api.unsplash.com/search/photos?query=${encodeURIComponent(matchingFallback)}&per_page=3&orientation=landscape`,
+          {
+            headers: {
+              'Authorization': `Client-ID ${unsplashAccessKey}`
+            }
+          }
+        );
+        
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          if (fallbackData.results?.length) {
+            console.log(`Fallback search successful: ${fallbackData.results.length} images found for "${matchingFallback}"`);
+            return fallbackData.results.map(photo => ({
+              url: photo.urls.regular,
+              alt: photo.alt_description || query,
+              caption: photo.description || `Image for ${query} (searched: ${matchingFallback})`,
+              source: `Unsplash (Photo by ${photo.user.name})`
+            }));
+          }
+        }
+      }
+      
       throw new Error('No images found');
     }
     
@@ -138,7 +278,13 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { markdown, title } = body;
+    console.log('📥 EDGE FUNCTION RECEIVED:', { 
+      hasMarkdown: !!body.markdown, 
+      title: body.title?.substring(0, 50) + '...', 
+      customDescription: body.customDescription,
+      isRefresh: body.isRefresh 
+    });
+    const { markdown, title, customDescription, xraySessionId, isRefresh } = body;
 
     if (!markdown) {
       return new Response(
@@ -147,16 +293,100 @@ serve(async (req) => {
       );
     }
 
-    console.log('Media Agent called with title:', title);
-    console.log('Markdown length:', markdown.length);
+    console.log('📸 MEDIA AGENT:', { title, contentLength: markdown.length, customDescription, isRefresh });
+
+    // 🎯 XRAY: Initialize conversation tracking
+    const mediaAgentConversation: XrayConversation = {
+      steps: [],
+      messages: [],
+      timing: { start: Date.now(), end: 0, duration: 0 },
+      model: 'gpt-4'
+    };
+
+    // 🎯 XRAY: Step 1 - Image Marker Detection
+    const semanticStart = Date.now();
+    mediaAgentConversation.steps.push({
+      id: 'semantic_extraction',
+      type: 'logical_operation',
+      name: 'Image Marker Detection',
+      description: 'Scanning content for existing [IMAGE:tag] markers from Content Agent',
+      timestamp: semanticStart,
+      status: 'running',
+      input: { 
+        content_length: markdown.length,
+        scan_mode: 'existing_markers',
+        priority: 'use_content_agent_markers'
+      }
+    });
+
+    // PHASE 0: Handle custom description if provided
+    if (customDescription) {
+      console.log('🔍 CUSTOM DESCRIPTION PROVIDED:', customDescription);
+      
+      // Create 3 spots with the custom description
+      const images: { location: string; options: Awaited<ReturnType<typeof searchImages>> }[] = [];
+      
+      for (let i = 1; i <= 3; i++) {
+        const location = `spot_${i}`;
+        const options = await searchImages(customDescription, isRefresh);
+        images.push({
+          location,
+          options
+        });
+      }
+      
+      console.log('✅ CUSTOM SEARCH COMPLETE:', images.length, 'spots created');
+      
+      return new Response(
+        JSON.stringify({ 
+          images,
+          ...(xraySessionId && {
+            conversations: {
+              media_agent: mediaAgentConversation
+            }
+          })
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // PHASE 1: Check for semantic image markers first
     const semanticMarkers = extractSemanticImageMarkers(markdown);
     
     if (semanticMarkers.length > 0) {
-      console.log('=== SEMANTIC MARKERS FOUND ===');
-      console.log('Found semantic image markers:', semanticMarkers);
-      console.log('=============================');
+      console.log('✅ SEMANTIC MARKERS:', semanticMarkers.length);
+      
+      // 🎯 XRAY: Complete semantic extraction step
+      const semanticStep = mediaAgentConversation.steps.find(s => s.id === 'semantic_extraction');
+      if (semanticStep) {
+        semanticStep.status = 'completed';
+        semanticStep.duration = Date.now() - semanticStart;
+        semanticStep.output = { 
+          markers_found: semanticMarkers.length,
+          path_taken: 'existing_markers',
+          markers_used: true
+        };
+        semanticStep.metadata = {
+          marker_tags: semanticMarkers.map(m => m.description),
+          source: 'content_agent_markers'
+        };
+      }
+
+      // 🎯 XRAY: Step 2 - Image Search (Marker-Based)
+      const imageSearchStart = Date.now();
+      mediaAgentConversation.steps.push({
+        id: 'semantic_image_search',
+        type: 'logical_operation',
+        name: 'Image Search (Marker-Based)',
+        description: 'Searching Unsplash using Content Agent\'s image marker tags',
+        timestamp: imageSearchStart,
+        status: 'running',
+        input: { 
+          markers_to_process: semanticMarkers.length,
+          search_source: 'unsplash_api',
+          search_method: 'content_agent_tags'
+        }
+      });
       
       // Process semantic markers directly
       const images: { location: string; options: Awaited<ReturnType<typeof searchImages>> }[] = [];
@@ -164,222 +394,77 @@ serve(async (req) => {
       for (let i = 0; i < semanticMarkers.length; i++) {
         const marker = semanticMarkers[i];
         const location = `spot_${i + 1}`;
-        console.log(`SEMANTIC PATH: Processing marker ${i + 1} - "${marker.description}"`);
-        
-        // Simplify the description for better Unsplash results
         const simplifiedQuery = simplifySearchQuery(marker.description);
-        console.log(`SEMANTIC PATH: Simplified query: "${simplifiedQuery}"`);
-        
-        const options = await searchImages(simplifiedQuery);
+        const options = await searchImages(simplifiedQuery, isRefresh);
         images.push({
           location,
           options
         });
       }
+
+      // 🎯 XRAY: Complete image search step
+      const imageSearchStep = mediaAgentConversation.steps.find(s => s.id === 'semantic_image_search');
+      if (imageSearchStep) {
+        imageSearchStep.status = 'completed';
+        imageSearchStep.duration = Date.now() - imageSearchStart;
+        imageSearchStep.output = {
+          images_found: images.length,
+          total_image_options: images.reduce((sum, img) => sum + img.options.length, 0)
+        };
+        imageSearchStep.metadata = {
+          search_queries: semanticMarkers.map(m => simplifySearchQuery(m.description))
+        };
+      }
+
+      // 🎯 XRAY: Finalize conversation timing
+      mediaAgentConversation.timing.end = Date.now();
+      mediaAgentConversation.timing.duration = mediaAgentConversation.timing.end - mediaAgentConversation.timing.start;
       
       return new Response(
-        JSON.stringify({ images }),
+        JSON.stringify({ 
+          images,
+          // 🎯 XRAY: Include conversation data if session ID provided
+          ...(xraySessionId && {
+            conversations: {
+              media_agent: mediaAgentConversation
+            }
+          })
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // PHASE 2: Fall back to AI analysis if no semantic markers
-    console.log('=== NO SEMANTIC MARKERS FOUND ===');
-    console.log('Falling back to AI content analysis');
-    console.log('================================');
+    // PHASE 2: No markers found - Content Agent error
+    console.log('❌ NO IMAGE MARKERS FOUND - Content Agent failed to provide markers');
 
-    // Fetch the media agent prompt from the DB
-    const { data: templateData, error: templateError } = await supabase
-      .from('content_templates')
-      .select('media_agent_prompt')
-      .eq('is_default', true)
-      .maybeSingle();
-
-    if (templateError) {
-      return new Response(
-        JSON.stringify({ error: 'Could not find media agent prompt', details: templateError }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
+    // 🎯 XRAY: Complete semantic extraction step (error case)
+    const semanticStep = mediaAgentConversation.steps.find(s => s.id === 'semantic_extraction');
+    if (semanticStep) {
+      semanticStep.status = 'failed';
+      semanticStep.duration = Date.now() - semanticStart;
+      semanticStep.output = { 
+        markers_found: 0,
+        error: 'content_agent_missing_markers',
+        message: 'Content Agent failed to provide [IMAGE:...] markers'
+      };
     }
 
-    // Default media agent prompt if none exists
-    const DEFAULT_MEDIA_AGENT_PROMPT = `You are an AI assistant for image search. Analyze the content and return 1-3 image spots as JSON:
-[{"location_tag": "spot_1", "search_query": "mountains"}]
-Use simple 1-2 word search queries only.`;
-
-    const mediaAgentPrompt = (templateData?.media_agent_prompt || DEFAULT_MEDIA_AGENT_PROMPT).trim();
-    
-    if (!mediaAgentPrompt) {
-      return new Response(
-        JSON.stringify({ error: 'Media agent prompt is empty' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    if (!openAIApiKey) {
-      return new Response(
-        JSON.stringify({ error: 'OpenAI API key is not configured in the server environment.' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    // Use the media agent prompt from the database
-    console.log('=== DEBUGGING MEDIA AGENT PROMPT ===');
-    console.log('Database templateData:', templateData);
-    console.log('Final mediaAgentPrompt being used:');
-    console.log(mediaAgentPrompt);
-    console.log('=====================================');
-    
-    console.log('AI PATH: Markdown for AI analysis (first 200 chars):', markdown.slice(0, 200) + '...');
-    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${openAIApiKey}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          { role: "system", content: mediaAgentPrompt },
-          { role: "user", content: `Here is the Markdown content to analyze:\n\n${markdown}` }
-        ],
-        temperature: 0.5,
-        max_tokens: 800,
-      })
-    });
-
-    if (!completion.ok) {
-      const error = await completion.json();
-      if (error.error?.code === "rate_limit_exceeded") {
-        return new Response(
-          JSON.stringify({
-            error: 'OpenAI API rate limit reached. Please wait a few seconds and try again.',
-            code: 'OPENAI_RATE_LIMIT',
-            details: error.error
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
-        );
-      }
-      return new Response(
-        JSON.stringify({ error: 'Error calling OpenAI API', details: error }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
-
-    const data = await completion.json();
-    const suggestionsText = data.choices[0].message.content;
-    console.log('=== RAW AI RESPONSE ===');
-    console.log('Full AI response:');
-    console.log(suggestionsText);
-    console.log('=====================');
-
-    // Parse the LLM output (expecting a JSON array)
-    let imageSpots: { location: string, query: string }[] = [];
-    try {
-      // First try to parse as JSON
-      const jsonResult = JSON.parse(suggestionsText);
-      console.log('=== PARSED JSON RESULT ===');
-      console.log('Parsed JSON from AI:', JSON.stringify(jsonResult, null, 2));
-      console.log('========================');
-      
-      // Handle array format
-      if (Array.isArray(jsonResult)) {
-        imageSpots = jsonResult.map((spotData, idx) => {
-          // The database prompt uses "search_query" and "location_tag"
-          const actualQuery = spotData.search_query || spotData.query;
-          const actualLocation = spotData.location_tag || spotData.location || `spot_${idx + 1}`;
-          
-          console.log(`Processing spot ${idx + 1}:`, {
-            original: spotData,
-            extractedQuery: actualQuery,
-            extractedLocation: actualLocation
-          });
-          
-          return {
-            location: `spot_${idx + 1}`, // Standardized location name for frontend
-            query: (actualQuery || title || 'task management').trim()
-          };
-        });
-      } 
-      // Handle object format with numbered keys
-      else if (typeof jsonResult === 'object' && jsonResult !== null) {
-        imageSpots = Object.entries(jsonResult).map(([key, valueObj], idx) => {
-          let extractedQuery = '';
-          if (typeof valueObj === 'string') {
-            extractedQuery = valueObj;
-          } else if (typeof valueObj === 'object' && valueObj !== null) {
-            extractedQuery = (valueObj as any).search_query || (valueObj as any).query || (valueObj as any).description;
-          }
-          return {
-            location: `spot_${idx+1}`,
-            query: (extractedQuery || title || 'task management').trim()
-          };
-        });
-      } else {
-        console.warn('AI PATH: AI response was not a JSON array or recognized object. Will rely on later fallbacks if imageSpots remains empty.');
-      }
-
-      console.log('=== FINAL IMAGE SPOTS ===');
-      console.log('Image spots after JSON parsing:', JSON.stringify(imageSpots, null, 2));
-      console.log('========================');
-    } catch (e) {
-      console.error('AI PATH: Failed to parse AI JSON response, or error during initial parsing. Error:', e);
-      // Fallback: try to parse a numbered list or bullet points
-      const lines = suggestionsText.split('\n').filter(l => l.trim());
-      imageSpots = lines
-        .map((line, idx) => {
-          // Clean up the line by removing prefixes like "1. " or "* " and extract the query
-          let cleanLine = line.replace(/^\s*[\d.*-]\s*/, '').trim(); 
-          const queryMarkers = ['query:', 'search_query:', 'description:'];
-          for (const marker of queryMarkers) {
-            if (cleanLine.toLowerCase().startsWith(marker)) {
-              cleanLine = cleanLine.substring(marker.length).trim();
-              break; 
-            }
-          }
-          return {
-            location: `spot_${idx+1}`,
-            query: (cleanLine || title || 'task management').trim()
-          };
-        }).filter(spot => spot.query && spot.query !== (title || 'task management')); // Filter out spots that only got a fallback
-      
-      if (imageSpots.length === 0 && lines.length > 0) {
-        console.log('AI PATH: Text parsing yielded no specific queries, using raw lines as fallback.');
-        imageSpots = lines.slice(0, Math.min(3, lines.length)).map((line, idx) => ({
-          location: `spot_${idx+1}`,
-          query: (line.trim() || title || 'task management').trim()
-        }));
-      }
-      console.log('AI PATH: Image spots after text-based fallback parsing:', imageSpots);
-    }
-    
-    // Ensure we have at least one image spot
-    if (imageSpots.length === 0) {
-      console.log('AI PATH: No image spots identified after all parsing attempts. Defaulting to title-based query.');
-      imageSpots = [
-        { location: 'spot_1', query: (title || 'task management tools').trim() }
-      ];
-    }
-    
-    // Limit to max 3 image spots
-    imageSpots = imageSpots.slice(0, 3);
-    
-    console.log('AI PATH: Final image spots selected for Unsplash search (max 3):', imageSpots);
-
-    // For each spot, search for images
-    const images: { location: string; options: Awaited<ReturnType<typeof searchImages>> }[] = [];
-    for (const spot of imageSpots) {
-      console.log(`AI PATH: Calling searchImages for spot location "${spot.location}" with query: "${spot.query}"`);
-      const options = await searchImages(spot.query);
-      images.push({
-        location: spot.location,
-        options
-      });
-    }
+    // 🎯 XRAY: Finalize conversation timing
+    mediaAgentConversation.timing.end = Date.now();
+    mediaAgentConversation.timing.duration = mediaAgentConversation.timing.end - mediaAgentConversation.timing.start;
 
     return new Response(
-      JSON.stringify({ images }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: 'No image markers found in content. Content Agent should have provided [IMAGE:...] markers.',
+        code: 'MISSING_IMAGE_MARKERS',
+        // 🎯 XRAY: Include conversation data if session ID provided
+        ...(xraySessionId && {
+          conversations: {
+            media_agent: mediaAgentConversation
+          }
+        })
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     );
   } catch (error) {
     return new Response(

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import { ResearchInsight } from "@/components/content/form/types";
+import { FormData, ResearchInsight } from "@/components/content/form/types";
+import { XrayService, AgentConversation } from './xrayService';
 
 export interface ResearchRequest {
   prompt: string;
@@ -16,6 +17,38 @@ export interface ResearchResponse {
   processing_time_seconds: number;
   error?: string;
   fallback_reason?: string;
+  // XRAY data - conversations from the edge function
+  conversations?: {
+    research_agent?: {
+      steps: Array<{
+        id: string;
+        type: 'ai_conversation' | 'logical_operation';
+        name: string;
+        description: string;
+        timestamp: number;
+        duration?: number;
+        status: 'running' | 'completed' | 'failed';
+        messages?: Array<{
+          role: 'system' | 'user' | 'assistant';
+          content: string;
+          timestamp: number;
+        }>;
+        model?: string;
+        tokens?: number;
+        input?: Record<string, unknown>;
+        output?: Record<string, unknown>;
+        metadata?: Record<string, unknown>;
+      }>;
+      messages: Array<{
+        role: 'system' | 'user' | 'assistant';
+        content: string;
+        timestamp: number;
+      }>;
+      timing: { start: number; end: number; duration: number };
+      tokens?: number;
+      model: string;
+    };
+  };
 }
 
 export const conductResearch = async (
@@ -57,6 +90,85 @@ export const conductResearch = async (
       throw new Error(data.error || 'Research failed for unknown reason');
     }
     
+    // 🎯 XRAY Integration: Capture Research Agent conversations
+    if (data.conversations?.research_agent) {
+      try {
+        console.log('🔍 DEBUG: Research agent conversation data:', data.conversations.research_agent);
+        console.log('🔍 DEBUG: Steps array:', data.conversations.research_agent.steps);
+        console.log('🔍 DEBUG: Steps length:', data.conversations.research_agent.steps?.length);
+        
+        // Get or create current session
+        const currentSession = XrayService.getCurrentSession();
+        let contentId = currentSession?.contentId;
+        
+        if (!contentId) {
+          // Create new session for this research
+          contentId = `research-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          XrayService.startSession(contentId);
+        }
+        
+        // Log Research Agent conversation
+        const researchConversation: AgentConversation = {
+          agentName: 'research_agent',
+          order: 1,
+          steps: data.conversations.research_agent.steps || [{
+            id: 'research_analysis_fallback',
+            type: 'ai_conversation',
+            name: 'Research Analysis (Legacy)',
+            description: 'AI analyzes Reddit discussions to find authentic user insights',
+            timestamp: Date.now(),
+            duration: data.conversations.research_agent.timing?.duration || 0,
+            status: 'completed',
+            messages: data.conversations.research_agent.messages,
+            model: data.conversations.research_agent.model,
+            tokens: data.conversations.research_agent.tokens
+          }],
+          messages: data.conversations.research_agent.messages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp
+          })),
+          timing: data.conversations.research_agent.timing,
+          tokens: data.conversations.research_agent.tokens,
+          model: data.conversations.research_agent.model
+        };
+        
+        console.log('🔍 DEBUG: Final research conversation object:', researchConversation);
+        console.log('🔍 DEBUG: Final steps count:', researchConversation.steps.length);
+        
+        XrayService.logConversation(contentId, researchConversation);
+        
+        // Log data flow - research enriches the original prompt
+        XrayService.logDataFlow(contentId, {
+          from: 'user_input',
+          to: 'research_agent',
+          data: { 
+            originalPrompt: request.prompt,
+            companyContext: request.company_description 
+          },
+          summary: `User prompt and company context provided to Research Agent for Reddit insight discovery`
+        });
+        
+        if (data.enriched_prompt) {
+          XrayService.logDataFlow(contentId, {
+            from: 'research_agent',
+            to: 'content_generator',
+            data: { 
+              enrichedPrompt: data.enriched_prompt,
+              insightSummary: data.insight_summary,
+              redditSource: data.reddit_post_url
+            },
+            summary: `Research Agent enriched the prompt with Reddit community insights and authentic terminology`
+          });
+        }
+        
+        console.log('✅ XRAY: Research Agent conversation captured');
+      } catch (xrayError) {
+        console.error('❌ XRAY: Failed to capture research conversation:', xrayError);
+        // Don't fail the research if XRAY capture fails
+      }
+    }
+    
     // Convert the research response to our expected format
     const insights: ResearchInsight[] = data.insight_summary ? [{
       id: Math.random().toString(36),
@@ -75,7 +187,7 @@ export const conductResearch = async (
       totalProcessingTime: data.processing_time_seconds || 0
     };
   } catch (error) {
-    console.error('Error in conductResearch:', error);
+    console.error('Error conducting research:', error);
     throw error;
   }
 }; 

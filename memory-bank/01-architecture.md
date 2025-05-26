@@ -149,6 +149,48 @@ supabase/functions/media-agent/
 - Do NOT modify the DEFAULT_MEDIA_AGENT_PROMPT in code - it's only a minimal fallback
 - All prompt improvements must be made via the Settings UI to update the database
 
+### Content Generation Function ✅ IMPLEMENTED
+**Endpoint**: `/functions/v1/generate-content`
+**Purpose**: Primary content generation using template-based prompts
+**Architecture**:
+```
+supabase/functions/generate-content/
+└── index.ts              # Main function with template processing and OpenAI integration
+```
+
+**Key Features**:
+- **Database-driven templates**: Fetches prompts from `content_templates` table
+- **Template variable processing**: Handles `${variable}` substitution with Function constructor
+- **Quote handling**: Processes both quoted and unquoted template variables
+- **OpenAI integration**: Uses GPT-4o model for content generation
+- **Error handling**: Comprehensive error recovery and logging
+
+## Template Processing System ✅ IMPLEMENTED
+
+### Template Variable Architecture
+**Storage**: All prompt templates stored in `content_templates` database table
+**Processing**: Edge functions use Function constructor for safe template literal evaluation
+**Variables**: Support for `prompt`, `company`, `wordCount`, `includeImages`, `includeFrontmatter`
+
+### Template Processing Workflow
+1. **Fetch Template**: Edge function retrieves current template from database
+2. **Clean Template**: Removes quotes around template variables (`"${prompt}"` → `${prompt}`)
+3. **Variable Setup**: Prepares all required variables from form data
+4. **Safe Evaluation**: Uses Function constructor to process template literals
+5. **Content Generation**: Processed prompt sent to AI model
+
+### Critical Fixes Applied ✅
+- **Quote Handling**: Template processing handles both `"${variable}"` and `${variable}` formats
+- **Missing Variables**: Fixed `ReferenceError: wordCount is not defined` by adding all variables to Function constructor
+- **Template Validation**: Settings page validates templates for required placeholders
+- **Deployment**: All edge functions updated and deployed with fixes
+
+### Template Management
+- **Settings UI**: All templates editable via Settings page
+- **Validation**: Real-time template validation prevents deployment of broken templates
+- **Fallbacks**: Minimal fallback templates in code for emergency scenarios only
+- **Version Control**: Database-driven approach ensures consistent template updates
+
 ### Content Generation Functions
 - Content generation with multiple AI models
 - SEO optimization and analysis

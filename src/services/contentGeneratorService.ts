@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { conductResearch } from "./researchService";
+import { XrayService, AgentConversation } from './xrayService';
 
 // Generate content using Edge Function
 export const generateContent = async (formData: FormData): Promise<GeneratedContent | null> => {
@@ -10,12 +11,16 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
     console.log('Sending request to generate content with data:', formData);
     
     let enrichedPrompt = formData.prompt;
-    let researchInsights: any[] = [];
+    let researchInsights: unknown[] = [];
+    let contentId: string | null = null;
     
     // Conduct research if enabled
     if (formData.enableResearch) {
       try {
-        console.log('Research enabled - conducting Reddit research...');
+        console.log('🔍 DEBUG: Research enabled - conducting Reddit research...');
+        console.log('🔍 DEBUG: Research query:', formData.researchQuery || formData.prompt);
+        console.log('🔍 DEBUG: Company:', formData.company);
+        
         const researchQuery = formData.researchQuery || formData.prompt;
         const researchResult = await conductResearch(
           researchQuery,
@@ -23,16 +28,31 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
           formData.company
         );
         
+        console.log('🔍 DEBUG: Research result received:', researchResult);
+        
         enrichedPrompt = researchResult.enrichedPrompt;
         researchInsights = researchResult.insights;
         
-        console.log(`Research completed: ${researchInsights.length} insights found`);
+        // Get the current session that was created during research
+        const currentSession = XrayService.getCurrentSession();
+        contentId = currentSession?.contentId || null;
+        
+        console.log(`🔍 DEBUG: Research completed: ${researchInsights.length} insights found`);
+        console.log('🔍 DEBUG: Current session after research:', currentSession);
         toast.success(`Research completed: ${researchInsights.length} insights discovered`);
       } catch (researchError) {
-        console.error('Research failed, continuing with original prompt:', researchError);
+        console.error('🔍 DEBUG: Research failed:', researchError);
         toast.error('Research failed, generating content with original prompt');
         // Continue with original prompt if research fails
       }
+    } else {
+      console.log('🔍 DEBUG: Research is DISABLED');
+    }
+    
+    // 🎯 XRAY: Start session if not already created by research
+    if (!contentId) {
+      contentId = `content-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      XrayService.startSession(contentId);
     }
     
     // Call the Supabase Edge Function with enriched prompt
@@ -41,7 +61,9 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
         formData: {
           ...formData,
           prompt: enrichedPrompt
-        }
+        },
+        // 🎯 XRAY: Include session ID to track conversations
+        xraySessionId: contentId
       },
     });
     
@@ -78,6 +100,54 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
     }
 
     console.log('Content generated successfully:', data);
+    
+    // 🎯 XRAY: Capture Content Generator conversations if returned
+    if (data.conversations?.content_generator && contentId) {
+      try {
+        const contentConversation: AgentConversation = {
+          agentName: 'content_generator',
+          order: 2, // After research agent
+          steps: data.conversations.content_generator.steps || [{
+            id: 'content_generation',
+            type: 'ai_conversation',
+            name: 'Content Generation',
+            description: 'AI generates article content using enriched insights',
+            timestamp: Date.now(),
+            duration: data.conversations.content_generator.timing?.duration || 0,
+            status: 'completed',
+            messages: data.conversations.content_generator.messages,
+            model: data.conversations.content_generator.model,
+            tokens: data.conversations.content_generator.tokens
+          }],
+          messages: data.conversations.content_generator.messages,
+          timing: data.conversations.content_generator.timing,
+          tokens: data.conversations.content_generator.tokens,
+          model: data.conversations.content_generator.model
+        };
+        
+        XrayService.logConversation(contentId, contentConversation);
+        
+        // Log data flow from research/user to content generator
+        const fromAgent = formData.enableResearch ? 'research_agent' : 'user_input';
+        XrayService.logDataFlow(contentId, {
+          from: fromAgent,
+          to: 'content_generator',
+          data: { 
+            enrichedPrompt: enrichedPrompt,
+            originalPrompt: formData.prompt,
+            company: formData.company
+          },
+          summary: formData.enableResearch 
+            ? `Content Generator received enriched prompt with Reddit insights from Research Agent`
+            : `Content Generator received original user prompt and company context`
+        });
+        
+        console.log('✅ XRAY: Content Generator conversation captured');
+      } catch (xrayError) {
+        console.error('❌ XRAY: Failed to capture content generation conversation:', xrayError);
+        // Don't fail content generation if XRAY capture fails
+      }
+    }
 
     // Store the content request and result in the database
     const dbIds = await storeContentRequest(formData, data);
@@ -112,7 +182,7 @@ const storeContentRequest = async (formData: FormData, generatedContent: Generat
         word_count: formData.wordCount,
         include_frontmatter: formData.includeFrontmatter,
         media_mode: formData.mediaMode,
-        media_file: formData.mediaFile ? formData.mediaFile.name : null,
+        media_file: formData.mediaFiles && formData.mediaFiles.length > 0 ? formData.mediaFiles[0].name : null,
       })
       .select('id')
       .single();
@@ -179,8 +249,8 @@ interface RawContentHistoryItem {
   id: string;
   title: string;
   content: string;
-  frontmatter: string | Record<string, any>; // It's a JSON string from DB, or parsed object
-  images: string | any[]; // JSON string or parsed array
+  frontmatter: string | Record<string, unknown>; // It's a JSON string from DB, or parsed object
+  images: string | unknown[]; // JSON string or parsed array
   word_count: number;
   reading_time: number;
   generated_at: string;
@@ -219,13 +289,13 @@ export const getContentHistory = async (): Promise<(GeneratedContent & { generat
         : (item.frontmatter || {});
 
       // Default empty array for images since it might not exist in the database
-      let imagesArr: any[] = [];
+      let imagesArr: unknown[] = [];
       
       // Check if the item has an images property before trying to parse it
       if ('images' in item) {
-        const itemImages = (item as any).images;
+        const itemImages = item.images;
         if (itemImages) {
-          imagesArr = typeof itemImages === 'string' ? JSON.parse(itemImages) : itemImages;
+                      imagesArr = typeof itemImages === 'string' ? JSON.parse(itemImages) : (itemImages as unknown[]);
         }
       }
         

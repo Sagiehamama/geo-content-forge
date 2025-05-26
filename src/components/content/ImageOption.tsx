@@ -8,7 +8,7 @@ interface ImageOptionProps {
   onSelect: () => void;
 }
 
-const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/600x400?text=Image+Not+Found';
+const PLACEHOLDER_IMAGE = '/placeholder-select.png';
 
 export const ImageOption: React.FC<ImageOptionProps> = ({ option, onSelect }) => {
   if (!option) {

@@ -27,6 +27,14 @@ const Header = () => {
             Results
           </NavLink>
           <NavLink 
+            to="/xray" 
+            className={({ isActive }) => 
+              isActive ? "font-medium text-primary" : "text-muted-foreground hover:text-foreground"
+            }
+          >
+            X-Ray
+          </NavLink>
+          <NavLink 
             to="/history" 
             className={({ isActive }) => 
               isActive ? "font-medium text-primary" : "text-muted-foreground hover:text-foreground"

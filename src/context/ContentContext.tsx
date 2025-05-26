@@ -61,7 +61,7 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
     if (formData) {
       const formDataToStore = { ...formData };
       // Don't store files in localStorage - just clear them
-      delete (formDataToStore as any).mediaFiles;
+      delete (formDataToStore as Record<string, unknown>).mediaFiles;
       localStorage.setItem('contentFormData', JSON.stringify(formDataToStore));
     }
     
@@ -151,7 +151,7 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
     }
     setIsSavingContent(true);
     try {
-      let currentRequestId = formData.id;
+      const currentRequestId = formData.id;
 
       // 1. Upsert content_requests
       // If formData.id exists, we assume it's from a previously saved request.
@@ -168,7 +168,7 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
       // Let's assume the `generatedContent.id` *is* the `generated_content` record ID from the initial save.
       // And `generatedContent.requestId` is the `content_requests` record ID.
 
-      let requestId = generatedContent.id; // This 'id' in GeneratedContent might be the request_id or generated_content_id itself
+      const requestId = generatedContent.id; // This 'id' in GeneratedContent might be the request_id or generated_content_id itself
                                          // From types.ts, GeneratedContent has id?: string and prompt?:string, language?: string
                                          // From contentGeneratorService, when loading history, it maps item.request_id to GeneratedContent.requestId
       
@@ -185,7 +185,7 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
       // This needs to be populated when `setGeneratedContent` is first called.
       // The `generateContent` function in service should return the created generated_content.id and content_request.id
 
-      if (!generatedContent.id || !(generatedContent as any).requestId) {
+      if (!generatedContent.id || !('requestId' in generatedContent)) {
         // This case means it's likely a fresh generation that hasn't been fully through the initial save process in contentGeneratorService,
         // or the IDs were not propagated to the context.
         // For a robust save here, we'd ideally have these IDs.
@@ -203,7 +203,7 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
             setIsSavingContent(false);
             return;
         }
-         if (!(generatedContent as any).requestId) {
+         if (!('requestId' in generatedContent)) {
             toast.error("Cannot save: Missing request ID for generated content record.");
             setIsSavingContent(false);
             return;
@@ -238,9 +238,9 @@ export const ContentProvider = ({ children }: { children: ReactNode }) => {
       setGeneratedContent(prev => prev ? ({...prev, images: finalImages}) : null);
 
       toast.success('Content and images saved successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in saveContent:', error);
-      toast.error(error.message || 'An unexpected error occurred while saving.');
+      toast.error(error instanceof Error ? error.message : 'An unexpected error occurred while saving.');
     } finally {
       setIsSavingContent(false);
     }

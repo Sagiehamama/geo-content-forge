@@ -42,6 +42,41 @@ export interface ResearchRequest {
   enable_research: boolean;
 }
 
+// 🎯 XRAY: Message interface for conversation capture
+export interface XrayMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+}
+
+// 🎯 XRAY: Step interface for detailed tracking
+export interface XrayStep {
+  id: string;
+  type: 'ai_conversation' | 'logical_operation';
+  name: string;
+  description: string;
+  timestamp: number;
+  duration?: number;
+  status: 'running' | 'completed' | 'failed';
+  // For AI conversations
+  messages?: XrayMessage[];
+  model?: string;
+  tokens?: number;
+  // For logical operations
+  input?: any;
+  output?: any;
+  metadata?: any;
+}
+
+// 🎯 XRAY: Conversation interface for agent conversations
+export interface XrayConversation {
+  steps: XrayStep[];
+  messages: XrayMessage[];
+  timing: { start: number; end: number; duration: number };
+  tokens?: number;
+  model: string;
+}
+
 export interface ResearchResponse {
   success: boolean;
   enriched_prompt?: string;
@@ -51,6 +86,10 @@ export interface ResearchResponse {
   processing_time_seconds: number;
   error?: string;
   fallback_reason?: string;
+  // 🎯 XRAY: Include conversation data for transparency
+  conversations?: {
+    research_agent?: XrayConversation;
+  };
 }
 
 export interface PostCandidate {
