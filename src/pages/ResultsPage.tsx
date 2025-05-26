@@ -334,6 +334,68 @@ const ResultsPage = () => {
         .catch(err => {
           console.error('Error getting media suggestions:', err);
           setMediaError(err.message || 'Failed to get media suggestions.');
+          
+          // 🎯 XRAY: Capture Media Agent conversations even from error responses
+          if (err.conversations?.media_agent && xraySessionId) {
+            try {
+              const mediaConversation: AgentConversation = {
+                agentName: 'media_agent',
+                order: 3,
+                steps: err.conversations.media_agent.steps || [{
+                  id: 'media_analysis_error',
+                  type: 'logical_operation',
+                  name: 'Media Analysis (Error)',
+                  description: 'Media Agent failed to find image markers',
+                  timestamp: Date.now(),
+                  duration: err.conversations.media_agent.timing?.duration || 0,
+                  status: 'failed',
+                  output: { error: err.message }
+                }],
+                messages: err.conversations.media_agent.messages || [],
+                timing: err.conversations.media_agent.timing || { start: Date.now(), end: Date.now(), duration: 0 },
+                tokens: err.conversations.media_agent.tokens,
+                model: err.conversations.media_agent.model || 'gpt-4'
+              };
+              
+              XrayService.logConversation(xraySessionId, mediaConversation);
+              console.log('✅ XRAY: Media Agent error conversation captured');
+            } catch (xrayError) {
+              console.error('❌ XRAY: Failed to capture media error conversation:', xrayError);
+            }
+          }
+          
+          // Create default spots for mathematical fallback when Media Agent fails
+          const defaultSpots = [
+            {
+              location: 'spot_1',
+              options: [{
+                url: PLACEHOLDER_IMAGE,
+                alt: 'Default image placeholder',
+                caption: 'Image placeholder',
+                source: 'System'
+              }]
+            },
+            {
+              location: 'spot_2',
+              options: [{
+                url: PLACEHOLDER_IMAGE,
+                alt: 'Default image placeholder',
+                caption: 'Image placeholder',
+                source: 'System'
+              }]
+            },
+            {
+              location: 'spot_3',
+              options: [{
+                url: PLACEHOLDER_IMAGE,
+                alt: 'Default image placeholder',
+                caption: 'Image placeholder',
+                source: 'System'
+              }]
+            }
+          ];
+          console.log('Created default media spots for mathematical fallback after Media Agent error');
+          setMediaSpots(defaultSpots);
         })
         .finally(() => setMediaLoading(false));
     }

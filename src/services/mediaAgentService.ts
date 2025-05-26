@@ -49,10 +49,16 @@ export const getMediaSuggestions = async (params: MediaAgentParams): Promise<{ i
     }
 
     if (data.error) {
-      if (data.code === 'OPENAI_RATE_LIMIT') {
-        throw new Error('OpenAI API rate limit reached. Please wait a few seconds and try again.');
+      const errorWithConversations = new Error(data.error);
+      // Preserve XRAY conversations even in error cases
+      if (data.conversations) {
+        (errorWithConversations as any).conversations = data.conversations;
       }
-      throw new Error(data.error);
+      
+      if (data.code === 'OPENAI_RATE_LIMIT') {
+        errorWithConversations.message = 'OpenAI API rate limit reached. Please wait a few seconds and try again.';
+      }
+      throw errorWithConversations;
     }
 
     return {
