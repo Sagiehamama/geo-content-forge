@@ -434,38 +434,222 @@ serve(async (req) => {
       );
     }
 
-    // PHASE 2: No markers found - Content Agent error
-    console.log('❌ NO IMAGE MARKERS FOUND - Content Agent failed to provide markers');
+    // PHASE 2: No markers found - Use AI analysis fallback for search queries
+    console.log('⚠️ NO IMAGE MARKERS FOUND - Using AI analysis fallback to generate search queries');
 
-    // 🎯 XRAY: Complete semantic extraction step (error case)
+    // 🎯 XRAY: Complete semantic extraction step (fallback case)
     const semanticStep = mediaAgentConversation.steps.find(s => s.id === 'semantic_extraction');
     if (semanticStep) {
-      semanticStep.status = 'failed';
+      semanticStep.status = 'completed';
       semanticStep.duration = Date.now() - semanticStart;
       semanticStep.output = { 
         markers_found: 0,
-        error: 'content_agent_missing_markers',
-        message: 'Content Agent failed to provide [IMAGE:...] markers'
+        path_taken: 'ai_analysis_fallback',
+        markers_used: false
+      };
+      semanticStep.metadata = {
+        fallback_reason: 'content_agent_missing_markers',
+        source: 'ai_content_analysis'
       };
     }
 
-    // 🎯 XRAY: Finalize conversation timing
-    mediaAgentConversation.timing.end = Date.now();
-    mediaAgentConversation.timing.duration = mediaAgentConversation.timing.end - mediaAgentConversation.timing.start;
+    // 🎯 XRAY: Step 2 - AI Content Analysis (Fallback)
+    const aiAnalysisStart = Date.now();
+    mediaAgentConversation.steps.push({
+      id: 'ai_content_analysis',
+      type: 'ai_conversation',
+      name: 'AI Content Analysis (Fallback)',
+      description: 'AI analyzes content to generate search queries for image discovery',
+      timestamp: aiAnalysisStart,
+      status: 'running',
+      input: { 
+        content_length: markdown.length,
+        analysis_mode: 'search_query_generation',
+        fallback_reason: 'no_content_agent_markers'
+      }
+    });
 
-    return new Response(
-      JSON.stringify({ 
-        error: 'No image markers found in content. Content Agent should have provided [IMAGE:...] markers.',
-        code: 'MISSING_IMAGE_MARKERS',
-        // 🎯 XRAY: Include conversation data if session ID provided
-        ...(xraySessionId && {
-          conversations: {
-            media_agent: mediaAgentConversation
-          }
-        })
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    );
+    // Use AI to analyze content and generate search queries
+    const aiAnalysisPrompt = `You are a specialized Media Selection Agent. Analyze the provided content and generate 1-3 simple search queries for finding relevant images.
+
+CONTENT TO ANALYZE:
+${markdown}
+
+INSTRUCTIONS:
+1. Identify 1-3 key topics/concepts that would benefit from images
+2. Generate SIMPLE, DIRECT search queries (1-3 words max)
+3. Focus on concrete, visual subjects
+4. Avoid style terms like "professional" or "high-quality"
+5. Convert brand names to conceptual terms
+
+RESPOND WITH ONLY A JSON ARRAY:
+[
+  {"search_query": "simple term"},
+  {"search_query": "another term"},
+  {"search_query": "third term"}
+]`;
+
+    try {
+      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a specialized Media Selection Agent that generates simple search queries for image discovery. Always respond with valid JSON only.'
+            },
+            {
+              role: 'user',
+              content: aiAnalysisPrompt
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 200
+        }),
+      });
+
+      if (!openaiResponse.ok) {
+        throw new Error(`OpenAI API error: ${openaiResponse.status}`);
+      }
+
+      const openaiData = await openaiResponse.json();
+      const aiResponse = openaiData.choices[0].message.content;
+
+      // 🎯 XRAY: Log AI conversation
+      const aiMessages: XrayMessage[] = [
+        {
+          role: 'system',
+          content: 'You are a specialized Media Selection Agent that generates simple search queries for image discovery. Always respond with valid JSON only.',
+          timestamp: Date.now()
+        },
+        {
+          role: 'user',
+          content: aiAnalysisPrompt,
+          timestamp: Date.now()
+        },
+        {
+          role: 'assistant',
+          content: aiResponse,
+          timestamp: Date.now()
+        }
+      ];
+
+      mediaAgentConversation.messages.push(...aiMessages);
+      mediaAgentConversation.tokens = (mediaAgentConversation.tokens || 0) + (openaiData.usage?.total_tokens || 0);
+
+      // Parse AI response to get search queries
+      const searchQueries = JSON.parse(aiResponse);
+      
+      // 🎯 XRAY: Complete AI analysis step
+      const aiAnalysisStep = mediaAgentConversation.steps.find(s => s.id === 'ai_content_analysis');
+      if (aiAnalysisStep) {
+        aiAnalysisStep.status = 'completed';
+        aiAnalysisStep.duration = Date.now() - aiAnalysisStart;
+        aiAnalysisStep.messages = aiMessages;
+        aiAnalysisStep.model = 'gpt-4o-mini';
+        aiAnalysisStep.tokens = openaiData.usage?.total_tokens || 0;
+        aiAnalysisStep.output = {
+          queries_generated: searchQueries.length,
+          search_queries: searchQueries.map(q => q.search_query)
+        };
+      }
+
+      // 🎯 XRAY: Step 3 - Image Search (AI-Generated Queries)
+      const imageSearchStart = Date.now();
+      mediaAgentConversation.steps.push({
+        id: 'ai_image_search',
+        type: 'logical_operation',
+        name: 'Image Search (AI-Generated Queries)',
+        description: 'Searching Unsplash using AI-generated search queries',
+        timestamp: imageSearchStart,
+        status: 'running',
+        input: { 
+          queries_to_process: searchQueries.length,
+          search_source: 'unsplash_api',
+          search_method: 'ai_generated_queries'
+        }
+      });
+
+      // Search for images using AI-generated queries
+      const images: { location: string; options: Awaited<ReturnType<typeof searchImages>> }[] = [];
+      
+      for (let i = 0; i < searchQueries.length; i++) {
+        const query = searchQueries[i].search_query;
+        const location = `spot_${i + 1}`;
+        const simplifiedQuery = simplifySearchQuery(query);
+        const options = await searchImages(simplifiedQuery, isRefresh);
+        images.push({
+          location,
+          options
+        });
+      }
+
+      // 🎯 XRAY: Complete image search step
+      const imageSearchStep = mediaAgentConversation.steps.find(s => s.id === 'ai_image_search');
+      if (imageSearchStep) {
+        imageSearchStep.status = 'completed';
+        imageSearchStep.duration = Date.now() - imageSearchStart;
+        imageSearchStep.output = {
+          images_found: images.length,
+          total_image_options: images.reduce((sum, img) => sum + img.options.length, 0)
+        };
+        imageSearchStep.metadata = {
+          search_queries: searchQueries.map(q => simplifySearchQuery(q.search_query))
+        };
+      }
+
+      // 🎯 XRAY: Finalize conversation timing
+      mediaAgentConversation.timing.end = Date.now();
+      mediaAgentConversation.timing.duration = mediaAgentConversation.timing.end - mediaAgentConversation.timing.start;
+
+      return new Response(
+        JSON.stringify({ 
+          images,
+          // 🎯 XRAY: Include conversation data if session ID provided
+          ...(xraySessionId && {
+            conversations: {
+              media_agent: mediaAgentConversation
+            }
+          })
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+
+    } catch (aiError) {
+      console.error('AI analysis failed:', aiError);
+      
+      // 🎯 XRAY: Mark AI analysis as failed
+      const aiAnalysisStep = mediaAgentConversation.steps.find(s => s.id === 'ai_content_analysis');
+      if (aiAnalysisStep) {
+        aiAnalysisStep.status = 'failed';
+        aiAnalysisStep.duration = Date.now() - aiAnalysisStart;
+        aiAnalysisStep.output = { error: aiError.message };
+      }
+
+      // 🎯 XRAY: Finalize conversation timing
+      mediaAgentConversation.timing.end = Date.now();
+      mediaAgentConversation.timing.duration = mediaAgentConversation.timing.end - mediaAgentConversation.timing.start;
+
+      return new Response(
+        JSON.stringify({ 
+          error: 'AI analysis failed to generate search queries',
+          code: 'AI_ANALYSIS_FAILED',
+          details: aiError.message,
+          // 🎯 XRAY: Include conversation data if session ID provided
+          ...(xraySessionId && {
+            conversations: {
+              media_agent: mediaAgentConversation
+            }
+          })
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
   } catch (error) {
     return new Response(
       JSON.stringify({ error: 'An unexpected error occurred', details: error.message }),
