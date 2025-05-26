@@ -1114,11 +1114,15 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
                 </Card>
                 
                 {/* Research Insights */}
-                {contextContent?.researchInsights && contextContent.researchInsights.length > 0 && (
+                {(contextContent?.researchInsights && contextContent.researchInsights.length > 0) || 
+                 (contextContent?.researchStatus?.enabled && !contextContent?.researchStatus?.insightsFound) ? (
                   <div className="mb-6">
-                    <ResearchInsights insights={contextContent.researchInsights} />
+                    <ResearchInsights 
+                      insights={contextContent.researchInsights || []} 
+                      researchStatus={contextContent.researchStatus}
+                    />
                   </div>
-                )}
+                ) : null}
                 
                 <Card>
                   <CardHeader className="pb-3">

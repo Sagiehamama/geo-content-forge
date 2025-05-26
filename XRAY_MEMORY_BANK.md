@@ -346,3 +346,64 @@ const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0i...';
 
 **Last Updated**: Major bug fixes and UI simplification complete
 **Next Steps**: Feature is complete and ready for user prompt optimization workflows 
+
+## 🚨 CRITICAL INCIDENT: Media Agent Infinite Loop Crisis
+
+### The Crisis
+**Date**: Recent production incident
+**Symptom**: Media Agent stuck in massive infinite loop, making hundreds of API calls
+**Impact**: Browser console flooded, system unusable, potential API rate limiting
+
+### Root Cause Analysis (Using XRAY)
+**Primary Issue**: Architectural misunderstanding about AI analysis purpose
+- ❌ **Assumption**: AI analysis in Media Agent was redundant to Content Agent positioning
+- ✅ **Reality**: AI analysis serves TWO distinct purposes:
+  1. **Search Query Generation** (ESSENTIAL - only way to get real images when no `[IMAGE:...]` markers)
+  2. ~~Position Selection~~ (this part was actually redundant)
+
+**Secondary Issue**: Frontend `useEffect` dependency loop
+- **Problem**: Including `contextMediaSpots` in dependencies caused infinite re-renders
+- **Trigger**: When Media Agent error created default spots, it triggered another Media Agent call
+
+### How XRAY Helped Debug
+1. **Conversation Visibility**: XRAY showed Media Agent was being called repeatedly
+2. **Step Analysis**: Could see the exact point where the loop occurred
+3. **Error Tracking**: XRAY conversation data was initially lost in error responses
+4. **Performance Impact**: Token usage metrics showed the scale of the problem
+
+### Resolution Steps
+1. **Restored AI Analysis Fallback** ✅
+   - Added AI content analysis step for search query generation
+   - Maintained XRAY conversation tracking for fallback path
+   - Specialized prompt for generating 1-3 simple search queries
+
+2. **Fixed Frontend Dependencies** ✅
+   - Removed `contextMediaSpots` and `setMediaSpots` from `useEffect` dependencies
+   - Prevented infinite re-render cycle
+
+3. **Enhanced Error Handling** ✅
+   - Modified `mediaAgentService.ts` to preserve conversation data in error responses
+   - Updated `ResultsPage.tsx` to extract and display XRAY data even from errors
+
+4. **Deployed Critical Fixes** ✅
+   - Updated Supabase Edge Function with AI analysis fallback
+   - Committed and pushed to both Master and main branches
+
+### XRAY Improvements Made
+- **Error Response Enhancement**: XRAY conversations now preserved even when Media Agent returns errors
+- **Fallback Path Tracking**: Complete visibility into AI analysis fallback workflow
+- **Performance Monitoring**: Better tracking of API call frequency and timing
+
+### Key Lessons
+1. **Architecture Understanding**: Never remove code without understanding its FULL purpose
+2. **Dependency Management**: Be careful with `useEffect` dependencies that can cause loops
+3. **Error Handling**: Always preserve debugging data (like XRAY) in error responses
+4. **XRAY Value**: Conversation tracking was crucial for diagnosing the infinite loop
+
+### Current Status
+✅ **FULLY RESOLVED**: Media Agent now provides real images whether Content Agent provides markers or not
+✅ **XRAY Enhanced**: Complete visibility into both success and error scenarios
+✅ **Performance Restored**: Single API call per content generation instead of hundreds
+✅ **Production Stable**: All fixes deployed and verified
+
+**Impact**: This crisis led to significant improvements in both the Media Agent architecture and XRAY debugging capabilities 

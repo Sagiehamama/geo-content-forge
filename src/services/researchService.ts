@@ -55,7 +55,7 @@ export const conductResearch = async (
   query: string, 
   prompt: string, 
   company?: string
-): Promise<{ insights: ResearchInsight[]; enrichedPrompt: string; totalProcessingTime: number }> => {
+): Promise<{ insights: ResearchInsight[]; enrichedPrompt: string; totalProcessingTime: number; noInsightsReason?: string }> => {
   try {
     console.log('Calling research agent with:', { query, prompt, company });
     
@@ -83,14 +83,21 @@ export const conductResearch = async (
     
     // Handle fallback cases (research disabled or failed)
     if (!data.success) {
-      if (data.fallback_reason) {
-        console.log('Research fallback:', data.fallback_reason);
-        throw new Error(`Research unavailable: ${data.fallback_reason}`);
+      // Check if this is a "no insights found" scenario (normal outcome)
+      if (data.fallback_reason && (
+        data.fallback_reason.includes('No valuable insights found') ||
+        data.fallback_reason.includes('No posts could be scraped') ||
+        data.fallback_reason.includes('No high-quality insights found')
+      )) {
+        console.log('Research completed with no insights:', data.fallback_reason);
+        // This is a normal outcome, not an error - continue with XRAY capture and return empty results
+      } else {
+        // This is an actual error
+        throw new Error(data.error || data.fallback_reason || 'Research failed for unknown reason');
       }
-      throw new Error(data.error || 'Research failed for unknown reason');
     }
     
-    // 🎯 XRAY Integration: Capture Research Agent conversations
+    // 🎯 XRAY Integration: Capture Research Agent conversations (even for "no insights" scenarios)
     if (data.conversations?.research_agent) {
       try {
         console.log('🔍 DEBUG: Research agent conversation data:', data.conversations.research_agent);
@@ -184,7 +191,11 @@ export const conductResearch = async (
     return {
       insights,
       enrichedPrompt: data.enriched_prompt || prompt,
-      totalProcessingTime: data.processing_time_seconds || 0
+      totalProcessingTime: data.processing_time_seconds || 0,
+      // Include fallback reason for "no insights" scenarios
+      ...(data.fallback_reason && !data.success && {
+        noInsightsReason: data.fallback_reason
+      })
     };
   } catch (error) {
     console.error('Error conducting research:', error);

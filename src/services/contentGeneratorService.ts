@@ -13,6 +13,7 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
     let enrichedPrompt = formData.prompt;
     let researchInsights: unknown[] = [];
     let contentId: string | null = null;
+    let researchStatus: any = null;
     
     // Conduct research if enabled
     if (formData.enableResearch) {
@@ -33,13 +34,28 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
         enrichedPrompt = researchResult.enrichedPrompt;
         researchInsights = researchResult.insights;
         
+        // Store research status for later use
+        researchStatus = {
+          enabled: true,
+          insightsFound: researchResult.insights.length > 0,
+          noInsightsReason: researchResult.noInsightsReason || null
+        };
+        
         // Get the current session that was created during research
         const currentSession = XrayService.getCurrentSession();
         contentId = currentSession?.contentId || null;
         
         console.log(`🔍 DEBUG: Research completed: ${researchInsights.length} insights found`);
         console.log('🔍 DEBUG: Current session after research:', currentSession);
-        toast.success(`Research completed: ${researchInsights.length} insights discovered`);
+        
+        // Handle different research outcomes
+        if (researchResult.noInsightsReason) {
+          toast.info(`Research completed: ${researchResult.noInsightsReason}. Proceeding with original prompt.`);
+        } else if (researchInsights.length > 0) {
+          toast.success(`Research completed: ${researchInsights.length} insights discovered`);
+        } else {
+          toast.info('Research completed: No specific insights found, proceeding with original prompt.');
+        }
       } catch (researchError) {
         console.error('🔍 DEBUG: Research failed:', researchError);
         toast.error('Research failed, generating content with original prompt');
@@ -158,6 +174,8 @@ export const generateContent = async (formData: FormData): Promise<GeneratedCont
       requestId: dbIds.requestId,
       images: data.images || [],
       researchInsights: researchInsights,
+      // Include research status information
+      ...(researchStatus && { researchStatus })
     };
   } catch (error) {
     console.error('Error in generateContent:', error);

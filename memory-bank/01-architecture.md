@@ -47,7 +47,7 @@
 **Implementation**: Supabase Edge Function with Unsplash API integration
 **Technology Stack**:
 - Unsplash API for stock photo search
-- OpenAI GPT-4 for intelligent image spot identification
+- OpenAI GPT-4 for intelligent image spot identification AND search query generation
 - PostgreSQL for prompt template storage
 - TypeScript with query simplification logic
 
@@ -58,18 +58,31 @@
 - All prompt improvements must be made via Settings page to update database
 
 **Key Features**:
-- AI-suggested image placement analysis
+- **Dual-Path Architecture**: Handles both marker-based and AI-analysis-based image discovery
+- **AI Analysis Fallback**: When Content Agent fails to provide `[IMAGE:...]` markers, AI analyzes content to generate search queries
 - Intelligent search query simplification (complex queries → simple 1-3 word terms)
 - Custom image description search capability
 - Automatic fallback for complex/specific location queries
 - Query mapping system (e.g., "Geneva to Chamonix" → "mountains")
 
+**Critical Architecture Understanding**:
+The AI analysis step serves TWO distinct purposes:
+1. **Search Query Generation** (ESSENTIAL): Only way to get real images when Content Agent doesn't provide semantic markers
+2. ~~Position Selection~~ (REDUNDANT): Frontend mathematical positioning handles this
+
 **Workflow**:
 1. Receives markdown content from frontend
-2. Fetches current media agent prompt from `content_templates` table
-3. AI analyzes content and suggests 1-3 optimal image spots
-4. Simplifies complex search queries for better Unsplash results
-5. Returns structured image options for each spot
+2. **Phase 1 - Marker Detection**: Scans for existing `[IMAGE:description]` markers from Content Agent
+3. **Phase 2A - Marker-Based Path**: If markers found, uses descriptions as search queries directly
+4. **Phase 2B - AI Analysis Fallback**: If no markers found, AI analyzes content to generate 1-3 simple search queries
+5. **Phase 3 - Image Search**: Searches Unsplash using either marker descriptions or AI-generated queries
+6. Returns structured image options for mathematical positioning by frontend
+
+**XRAY Integration**:
+- **Step 1**: Image Marker Detection (logical operation)
+- **Step 2**: AI Content Analysis (AI conversation - only when no markers found)
+- **Step 3**: Image Search (logical operation using either markers or AI queries)
+- Complete conversation tracking for both paths with timing and token metrics
 
 ## Database Schema
 

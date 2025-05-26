@@ -257,11 +257,22 @@ serve(async (req) => {
     }
 
     if (allPosts.length === 0) {
+      // 🎯 XRAY: Finalize conversation timing for "no posts scraped" case
+      researchAgentConversation.timing.end = Date.now();
+      researchAgentConversation.timing.duration = researchAgentConversation.timing.end - researchAgentConversation.timing.start;
+      
+      console.log(`Research completed with no posts scraped in ${((performance.now() - startTime) / 1000).toFixed(2)} seconds`);
+      console.log(`✅ XRAY: Captured ${researchAgentConversation.steps.length} steps (no posts scraped)`);
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
           fallback_reason: 'No posts could be scraped from any subreddit',
-          processing_time_seconds: (performance.now() - startTime) / 1000
+          processing_time_seconds: (performance.now() - startTime) / 1000,
+          // 🎯 XRAY: Include conversations even when no posts scraped
+          conversations: {
+            research_agent: researchAgentConversation
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
@@ -280,11 +291,22 @@ serve(async (req) => {
     };
 
     if (candidates.length === 0) {
+      // 🎯 XRAY: Finalize conversation timing for "no insights" case
+      researchAgentConversation.timing.end = Date.now();
+      researchAgentConversation.timing.duration = researchAgentConversation.timing.end - researchAgentConversation.timing.start;
+      
+      console.log(`Research completed with no insights in ${((performance.now() - startTime) / 1000).toFixed(2)} seconds`);
+      console.log(`✅ XRAY: Captured ${researchAgentConversation.steps.length} steps (no insights found)`);
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
           fallback_reason: 'No valuable insights found in scraped posts',
-          processing_time_seconds: (performance.now() - startTime) / 1000
+          processing_time_seconds: (performance.now() - startTime) / 1000,
+          // 🎯 XRAY: Include conversations even when no insights found
+          conversations: {
+            research_agent: researchAgentConversation
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
@@ -296,11 +318,22 @@ serve(async (req) => {
     const bestInsight = await findBestInsight(redditScraper, candidates, prompt, company_description);
 
     if (!bestInsight) {
+      // 🎯 XRAY: Finalize conversation timing for "no high-quality insights" case
+      researchAgentConversation.timing.end = Date.now();
+      researchAgentConversation.timing.duration = researchAgentConversation.timing.end - researchAgentConversation.timing.start;
+      
+      console.log(`Research completed with no high-quality insights in ${((performance.now() - startTime) / 1000).toFixed(2)} seconds`);
+      console.log(`✅ XRAY: Captured ${researchAgentConversation.steps.length} steps (no high-quality insights)`);
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
           fallback_reason: 'No high-quality insights found after deep analysis',
-          processing_time_seconds: (performance.now() - startTime) / 1000
+          processing_time_seconds: (performance.now() - startTime) / 1000,
+          // 🎯 XRAY: Include conversations even when no high-quality insights found
+          conversations: {
+            research_agent: researchAgentConversation
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );

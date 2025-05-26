@@ -10,6 +10,45 @@
 
 ## Troubleshooting Guide ✅ RECENT FIXES
 
+### Media Agent Infinite Loop Crisis ✅ RESOLVED
+**Symptom**: Media Agent making hundreds of API calls in infinite loop, browser console flooded with requests
+**Root Cause**: Architectural misunderstanding - removed AI analysis fallback that was essential for search query generation
+**Secondary Cause**: Frontend `useEffect` dependency loop with `contextMediaSpots`
+
+**Critical Architecture Fix**:
+```typescript
+// WRONG ASSUMPTION: AI analysis was redundant
+// REALITY: AI analysis serves TWO purposes:
+// 1. Search Query Generation (ESSENTIAL) ✅ Restored
+// 2. Position Selection (REDUNDANT) ❌ Correctly removed
+
+// Correct Architecture:
+Content Agent → [IMAGE:markers] OR no markers
+                     ↓                ↓
+            Use markers as queries  AI analysis generates queries
+                     ↓                ↓
+                 Search Unsplash images
+                     ↓
+            Frontend mathematical positioning
+```
+
+**Frontend Dependency Fix**:
+```typescript
+// WRONG: Causes infinite loop
+}, [contextContent, mediaRetryCount, contextMediaSpots, setMediaSpots]);
+
+// CORRECT: Prevents infinite re-renders
+}, [contextContent, mediaRetryCount, useCustomDescription, contextFormData]);
+```
+
+**Solution Steps**:
+1. Restored AI analysis fallback in Media Agent for search query generation
+2. Removed `contextMediaSpots` from `useEffect` dependencies
+3. Enhanced error handling to preserve XRAY conversation data
+4. Deployed updated edge function to Supabase
+
+**Prevention**: Always understand the FULL purpose of code before removing it - the AI analysis wasn't just for positioning, it was the ONLY way to get real images when Content Agent fails to provide markers.
+
 ### Template Processing Issues
 **Symptom**: `ReferenceError: [variable] is not defined` in edge function logs
 **Cause**: Missing variable in Function constructor parameters

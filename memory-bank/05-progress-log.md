@@ -274,3 +274,65 @@
 - Proper error handling and fallbacks maintain user experience
 - Database schema evolution requires careful validation of relationships
 - Performance optimization critical for user-facing research features
+
+### Media Agent Architecture Crisis & Resolution ✅ CRITICAL FIXES
+
+**The Problem: Infinite Loop Crisis**
+- 🚨 **Symptom**: Media Agent stuck in massive infinite loop, making hundreds of API calls
+- 🚨 **Root Cause**: Removed AI analysis fallback that was essential for generating search queries when Content Agent fails to provide `[IMAGE:...]` markers
+- 🚨 **Secondary Issue**: `useEffect` dependency loop in frontend caused by including `contextMediaSpots` in dependencies
+
+**Architecture Misunderstanding Resolved**
+- ❌ **Previous Assumption**: AI analysis in Media Agent was redundant to Content Agent positioning
+- ✅ **Reality**: AI analysis serves TWO purposes:
+  1. **Search Query Generation** (ESSENTIAL - only way to get real images when no markers)
+  2. ~~Position Selection~~ (this part was actually redundant)
+
+**Critical Fixes Applied**
+
+1. **Restored AI Analysis Fallback** ✅
+   - **Purpose**: Generate search queries when Content Agent fails to provide semantic markers
+   - **Implementation**: Added AI content analysis step that creates 1-3 simple search queries
+   - **Result**: Real Unsplash images instead of placeholder images when AI ignores instructions
+   - **XRAY Integration**: Full conversation tracking for AI analysis fallback path
+
+2. **Fixed Frontend Infinite Loop** ✅
+   - **Issue**: `contextMediaSpots` in `useEffect` dependencies caused infinite re-renders
+   - **Fix**: Removed `contextMediaSpots` and `setMediaSpots` from dependencies array
+   - **Result**: Media Agent called once per content generation, not hundreds of times
+
+3. **Enhanced Error Handling** ✅
+   - **XRAY Preservation**: Error responses now include conversation data for debugging
+   - **Mathematical Fallback**: Creates default spots when Media Agent fails completely
+   - **Graceful Degradation**: System works with placeholders if all else fails
+
+**The Correct Architecture Now**
+```
+Content Agent generates content:
+├── WITH [IMAGE:...] markers → Media Agent uses markers as search queries → Real images
+└── WITHOUT markers → Media Agent AI analysis → Generates search queries → Real images
+
+Frontend mathematical positioning handles placement in BOTH cases
+```
+
+**Technical Implementation Details**
+- **AI Analysis Prompt**: Specialized for generating 1-3 simple search queries (1-3 words max)
+- **Search Query Focus**: Converts complex content to concrete, visual search terms
+- **Brand Name Handling**: Converts brand names to conceptual terms (e.g., "Clickup" → "task management")
+- **Fallback Chain**: Markers → AI Analysis → Mathematical Positioning → Placeholders
+
+**Performance Impact**
+- ✅ **Eliminated Infinite Loops**: From hundreds of calls to single call per generation
+- ✅ **Real Image Discovery**: No more permanent placeholder images
+- ✅ **XRAY Transparency**: Complete visibility into fallback decision process
+- ✅ **Error Recovery**: Graceful handling of all failure scenarios
+
+**Deployment Status**
+- ✅ **Edge Function**: Deployed to Supabase with AI analysis fallback
+- ✅ **Frontend**: Fixed infinite loop dependencies
+- ✅ **Git**: Committed and pushed to both Master and main branches
+- ✅ **Testing**: Verified in production environment
+
+**Key Insight**: The position selection logic we removed wasn't just redundant - it contained the ONLY mechanism for getting real images when Content Agent doesn't provide semantic markers. We kept the essential search query generation while removing only the truly redundant positioning logic.
+
+**Status**: ✅ **CRISIS RESOLVED** - Media Agent now provides real images whether Content Agent provides markers or not, with complete XRAY visibility and no infinite loops.

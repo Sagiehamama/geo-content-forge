@@ -1,14 +1,52 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, TrendingUp, MessageSquare } from "lucide-react";
+import { ExternalLink, TrendingUp, MessageSquare, Info, Search } from "lucide-react";
 import { ResearchInsight } from "@/components/content/form/types";
 
 interface ResearchInsightsProps {
   insights: ResearchInsight[];
+  researchStatus?: {
+    enabled: boolean;
+    insightsFound: boolean;
+    noInsightsReason?: string;
+  };
 }
 
-export const ResearchInsights: React.FC<ResearchInsightsProps> = ({ insights }) => {
+export const ResearchInsights: React.FC<ResearchInsightsProps> = ({ insights, researchStatus }) => {
+  // Show "no insights" card if research was enabled but no insights found
+  if (researchStatus?.enabled && !researchStatus.insightsFound && researchStatus.noInsightsReason) {
+    return (
+      <Card className="border-orange-200 bg-orange-50/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-orange-800">
+            <Search className="h-5 w-5" />
+            Reddit Research Results
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-white rounded-lg p-4 border border-orange-100">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-medium text-orange-900 mb-2">
+                  No Valuable Insights Found
+                </h4>
+                <p className="text-orange-700 text-sm mb-3">
+                  {researchStatus.noInsightsReason}
+                </p>
+                <p className="text-orange-600 text-xs">
+                  Content was generated using your original prompt without Reddit insights.
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  // Don't show anything if research wasn't enabled or no insights
   if (!insights || insights.length === 0) {
     return null;
   }

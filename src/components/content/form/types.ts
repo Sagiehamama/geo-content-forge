@@ -62,6 +62,12 @@ export interface GeneratedContent {
   language?: string;
   // Research insights
   researchInsights?: ResearchInsight[];
+  // Research status information
+  researchStatus?: {
+    enabled: boolean;
+    insightsFound: boolean;
+    noInsightsReason?: string;
+  };
 }
 
 // For the content history
