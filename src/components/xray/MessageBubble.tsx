@@ -225,19 +225,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, agentMode
           </div>
         )}
         
-        {/* Compact expand button */}
-        {showExpandOption && !isExpanded && (
+        {/* Compact expand/collapse button */}
+        {showExpandOption && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsExpanded(!isExpanded)}
             className="h-5 w-full mt-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            <ChevronDown size={10} className="mr-1" />
-            {jsonContent.hasJson 
-              ? `Show ${Array.isArray(jsonContent.jsonData) ? jsonContent.jsonData.length : 'full'} ${Array.isArray(jsonContent.jsonData) ? 'items' : 'data'}`
-              : `+${message.content.length - truncateLength} chars`
-            }
+            {isExpanded ? (
+              <>
+                <ChevronUp size={10} className="mr-1" />
+                Show Less
+              </>
+            ) : (
+              <>
+                <ChevronDown size={10} className="mr-1" />
+                {jsonContent.hasJson 
+                  ? `Show ${Array.isArray(jsonContent.jsonData) ? jsonContent.jsonData.length : 'full'} ${Array.isArray(jsonContent.jsonData) ? 'items' : 'data'}`
+                  : `+${message.content.length - truncateLength} chars`
+                }
+              </>
+            )}
           </Button>
         )}
       </CardContent>

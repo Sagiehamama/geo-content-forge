@@ -12,6 +12,7 @@ interface AgentTabsProps {
     timing?: { duration: number };
     tokens?: number;
     model?: string;
+    steps?: Array<{ type: 'ai_conversation' | 'logical_operation' }>;
   }>;
 }
 
@@ -87,8 +88,13 @@ export const AgentTabs = ({ selectedAgent, onSelectAgent, agents }: AgentTabsPro
           >
             <span>{getAgentIcon(agent.agentName)}</span>
             <span>{getAgentLabel(agent.agentName)}</span>
-            {agent.timing && (
+            {agent.steps && (
               <span className="text-xs text-gray-500 ml-2">
+                {agent.steps.filter(s => s.type === 'ai_conversation').length} AI • {agent.steps.filter(s => s.type === 'logical_operation').length} ops
+              </span>
+            )}
+            {agent.timing && (
+              <span className="text-xs text-gray-500 ml-1">
                 {(agent.timing.duration / 1000).toFixed(1)}s
               </span>
             )}

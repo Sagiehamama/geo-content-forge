@@ -70,7 +70,10 @@ const XrayPage: React.FC = () => {
           <AgentTabs
             selectedAgent={selectedAgent}
             onSelectAgent={setSelectedAgent}
-            agents={currentSession.agents}
+            agents={currentSession.agents.map(agent => ({
+              ...agent,
+              steps: agent.steps
+            }))}
           />
           
           {getCurrentAgent() ? (
