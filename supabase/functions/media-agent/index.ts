@@ -189,11 +189,11 @@ async function searchImages(query: string, isRefresh: boolean = false) {
       simplifiedQuery: simplifiedQuery,
       encodedQuery: encodeURIComponent(simplifiedQuery),
       isRefresh: isRefresh,
-      finalUrl: `https://api.unsplash.com/search/photos?query=${encodeURIComponent(simplifiedQuery)}&per_page=3&orientation=landscape`
+              finalUrl: `https://api.unsplash.com/search/photos?query=${encodeURIComponent(simplifiedQuery)}&per_page=15&orientation=landscape`
     });
     
     const response = await fetch(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(simplifiedQuery)}&per_page=3&orientation=landscape`,
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(simplifiedQuery)}&per_page=15&orientation=landscape`,
       {
         headers: {
           'Authorization': `Client-ID ${unsplashAccessKey}`
@@ -469,25 +469,22 @@ serve(async (req) => {
       }
     });
 
-    // Use AI to analyze content and generate search queries
-    const aiAnalysisPrompt = `You are a specialized Media Selection Agent. Analyze the provided content and generate 1-3 simple search queries for finding relevant images.
+    // Use AI to analyze content and generate ONE unified search query
+    const aiAnalysisPrompt = `You are a specialized Media Selection Agent. Analyze the provided content and generate ONE unified search query that captures the main topic for finding relevant images.
 
 CONTENT TO ANALYZE:
 ${markdown}
 
 INSTRUCTIONS:
-1. Identify 1-3 key topics/concepts that would benefit from images
-2. Generate SIMPLE, DIRECT search queries (1-3 words max)
-3. Focus on concrete, visual subjects
+1. Identify the MAIN topic/theme of the content
+2. Generate ONE SIMPLE, DIRECT search query (1-3 words max)
+3. Focus on the core subject that would be visually relevant throughout the article
 4. Avoid style terms like "professional" or "high-quality"
 5. Convert brand names to conceptual terms
+6. Choose a term that would provide good variety of related images
 
-RESPOND WITH ONLY A JSON ARRAY:
-[
-  {"search_query": "simple term"},
-  {"search_query": "another term"},
-  {"search_query": "third term"}
-]`;
+RESPOND WITH ONLY A JSON OBJECT:
+{"search_query": "main topic term"}`;
 
     try {
       const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -542,8 +539,9 @@ RESPOND WITH ONLY A JSON ARRAY:
       mediaAgentConversation.messages.push(...aiMessages);
       mediaAgentConversation.tokens = (mediaAgentConversation.tokens || 0) + (openaiData.usage?.total_tokens || 0);
 
-      // Parse AI response to get search queries
-      const searchQueries = JSON.parse(aiResponse);
+      // Parse AI response to get the unified search query
+      const searchQueryResponse = JSON.parse(aiResponse);
+      const unifiedQuery = searchQueryResponse.search_query;
       
       // 🎯 XRAY: Complete AI analysis step
       const aiAnalysisStep = mediaAgentConversation.steps.find(s => s.id === 'ai_content_analysis');
@@ -554,52 +552,58 @@ RESPOND WITH ONLY A JSON ARRAY:
         aiAnalysisStep.model = 'gpt-4o-mini';
         aiAnalysisStep.tokens = openaiData.usage?.total_tokens || 0;
         aiAnalysisStep.output = {
-          queries_generated: searchQueries.length,
-          search_queries: searchQueries.map(q => q.search_query)
+          unified_query: unifiedQuery,
+          approach: 'single_query_multiple_spots'
         };
       }
 
-      // 🎯 XRAY: Step 3 - Image Search (AI-Generated Queries)
+      // 🎯 XRAY: Step 3 - Unified Image Search
       const imageSearchStart = Date.now();
       mediaAgentConversation.steps.push({
-        id: 'ai_image_search',
+        id: 'unified_image_search',
         type: 'logical_operation',
-        name: 'Image Search (AI-Generated Queries)',
-        description: 'Searching Unsplash using AI-generated search queries',
+        name: 'Unified Image Search',
+        description: 'Searching Unsplash using single unified query for consistent image pool',
         timestamp: imageSearchStart,
         status: 'running',
         input: { 
-          queries_to_process: searchQueries.length,
+          unified_query: unifiedQuery,
           search_source: 'unsplash_api',
-          search_method: 'ai_generated_queries'
+          search_method: 'unified_query_approach',
+          images_per_query: 15,
+          spots_to_create: 3
         }
       });
 
-      // Search for images using AI-generated queries
+      // Search for images using the unified query (10 images)
+      const simplifiedQuery = simplifySearchQuery(unifiedQuery);
+      const imageOptions = await searchImages(simplifiedQuery, isRefresh);
+      
+      // Create 3 spots, each with the same pool of 10 images for user selection
       const images: { location: string; options: Awaited<ReturnType<typeof searchImages>> }[] = [];
       
-      for (let i = 0; i < searchQueries.length; i++) {
-        const query = searchQueries[i].search_query;
-        const location = `spot_${i + 1}`;
-        const simplifiedQuery = simplifySearchQuery(query);
-        const options = await searchImages(simplifiedQuery, isRefresh);
+      for (let i = 1; i <= 3; i++) {
         images.push({
-          location,
-          options
+          location: `spot_${i}`,
+          options: imageOptions // Same 10 images for each spot
         });
       }
 
       // 🎯 XRAY: Complete image search step
-      const imageSearchStep = mediaAgentConversation.steps.find(s => s.id === 'ai_image_search');
+      const imageSearchStep = mediaAgentConversation.steps.find(s => s.id === 'unified_image_search');
       if (imageSearchStep) {
         imageSearchStep.status = 'completed';
         imageSearchStep.duration = Date.now() - imageSearchStart;
         imageSearchStep.output = {
-          images_found: images.length,
-          total_image_options: images.reduce((sum, img) => sum + img.options.length, 0)
+          spots_created: images.length,
+          images_per_spot: imageOptions.length,
+          total_image_options: images.length * imageOptions.length,
+          unified_approach: true
         };
         imageSearchStep.metadata = {
-          search_queries: searchQueries.map(q => simplifySearchQuery(q.search_query))
+          unified_query: unifiedQuery,
+          simplified_query: simplifiedQuery,
+          approach: 'same_pool_all_spots'
         };
       }
 

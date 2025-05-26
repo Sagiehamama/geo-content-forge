@@ -142,6 +142,19 @@ const ResultsPage = () => {
             const frontmatterEndIndex = cleanContent.indexOf('---', 3);
             if (frontmatterEndIndex > 0) {
               cleanContent = cleanContent.substring(frontmatterEndIndex + 3).trim();
+            } else {
+              // If no closing ---, strip everything until the first non-frontmatter line
+              const lines = cleanContent.split('\n');
+              let contentStartIndex = 1; // Skip the opening ---
+              for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                // Look for the start of actual content (not YAML key-value pairs)
+                if (line && !line.includes(':') && !line.startsWith('-') && line !== '---') {
+                  contentStartIndex = i;
+                  break;
+                }
+              }
+              cleanContent = lines.slice(contentStartIndex).join('\n').trim();
             }
           }
           
@@ -651,6 +664,11 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       console.log('🔍 CUSTOM SEARCH:', customDescription);
       localStorage.setItem('lastCustomDescription', customDescription);
       setLastCustomDescription(customDescription);
+      
+      // Immediately clear existing images to show loading state
+      setMediaSpots([]);
+      setMediaLoading(true);
+      
       await handleRefreshImages(customDescription);
     }
   };
@@ -666,6 +684,19 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
       if (frontmatterEndIndex > 0) {
         // Extract everything after the closing --- of the frontmatter
         processedContent = processedContent.substring(frontmatterEndIndex + 3).trim();
+      } else {
+        // If no closing ---, strip everything until the first non-frontmatter line
+        const lines = processedContent.split('\n');
+        let contentStartIndex = 1; // Skip the opening ---
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          // Look for the start of actual content (not YAML key-value pairs)
+          if (line && !line.includes(':') && !line.startsWith('-') && line !== '---') {
+            contentStartIndex = i;
+            break;
+          }
+        }
+        processedContent = lines.slice(contentStartIndex).join('\n').trim();
       }
     }
     
@@ -1286,9 +1317,14 @@ ${contextContent.frontmatter.featuredImage ? `featuredImage: ${contextContent.fr
           {/* Image results */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-4">
             {mediaLoading ? (
-              <div className="col-span-full text-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-                <p className="text-muted-foreground">Loading new image suggestions...</p>
+              <div className="col-span-full text-center py-12">
+                <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+                <p className="text-lg font-medium">
+                  {useCustomDescription ? 'Searching for custom images...' : 'Loading new image suggestions...'}
+                </p>
+                <p className="text-muted-foreground mt-2">
+                  {useCustomDescription ? 'Finding images that match your description' : 'This may take a few seconds'}
+                </p>
               </div>
             ) : selectedSpot && (() => {
               const currentSpot = contextMediaSpots.find(spot => spot.location === selectedSpot);
