@@ -399,7 +399,7 @@ const ResultsPage = () => {
         })
         .finally(() => setMediaLoading(false));
     }
-  }, [contextContent, mediaRetryCount, contextMediaSpots, setMediaSpots, useCustomDescription, contextFormData]);
+  }, [contextContent, mediaRetryCount, useCustomDescription, contextFormData]);
   
   const handleCopyContent = () => {
     if (contextContent) {
